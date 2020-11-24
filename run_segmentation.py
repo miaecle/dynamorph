@@ -5,15 +5,17 @@ from pipeline.segmentation_validation import segmentation_validation_michael
 from multiprocessing import Process
 import os
 import numpy as np
-
 import argparse
+import json
+from params import DynaMorphConfig
 
 
 class Worker(Process):
-    def __init__(self, inputs, gpuid=0, method='segmentation'):
+    def __init__(self, inputs, params, gpuid=0, method='segmentation'):
         super().__init__()
         self.gpuid = gpuid
         self.inputs = inputs
+        self.params = params
         self.method = method
 
     def run(self):
@@ -21,14 +23,22 @@ class Worker(Process):
         os.environ["CUDA_VISIBLE_DEVICES"] = str(self.gpuid)
 
         if self.method == 'segmentation':
-            segmentation(self.inputs)
+            segmentation(self.inputs, self.params)
         elif self.method == 'instance_segmentation':
-            instance_segmentation(self.inputs)
+            instance_segmentation(self.inputs, self.params)
         elif self.method == 'segmentation_validation':
             segmentation_validation_michael(self.inputs, self.gpuid, 'unfiltered')
 
 
 def main(arguments_):
+
+    # Configurations
+    params = DynaMorphConfig()
+    if arguments_.param:
+        extra_params_dict = json.load(open(arguments_.param, "r"))
+        params.update(extra_params_dict)
+        for k in extra_params_dict:
+            print("Using parameter %s: %s" % (str(k), str(extra_params_dict[k])))
 
     print("CLI arguments provided")
     inputs = arguments_.raw
@@ -37,6 +47,7 @@ def main(arguments_):
     n_gpu = arguments_.gpus
     method = arguments_.method
 
+    # Check arguments
     # segmentation validation requires raw, supp, and validation definitions
     if method == 'segmentation_validation':
         if arguments_.validation:
@@ -75,7 +86,7 @@ def main(arguments_):
     for i in range(n_gpu):
         _sites = segment_sites[sep[i]:sep[i + 1]]
         args = (inputs, outputs, TARGET, _sites)
-        process = Worker(args, gpuid=i, method=method)
+        process = Worker(args, params, gpuid=i, method=method)
         process.start()
         processes.append(process)
     for p in processes:
@@ -136,6 +147,13 @@ def parse_args():
         required=False,
         help="comma-delimited list of FOVs (subfolders in raw data directory)",
     )
+    parser.add_argument(
+        '-p', '--param',
+        type=str,
+        required=False,
+        help="Path to the json file for configuration",
+    )
+
     return parser.parse_args()
 
 

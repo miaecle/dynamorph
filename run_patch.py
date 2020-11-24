@@ -5,13 +5,16 @@ from multiprocessing import Pool, Queue, Process
 import os
 import numpy as np
 import argparse
+import json
+from params import DynaMorphConfig
 
 
 class Worker(Process):
-    def __init__(self, inputs, gpuid=0, method='extract_patches'):
+    def __init__(self, inputs, params, gpuid=0, method='extract_patches'):
         super().__init__()
         self.gpuid = gpuid
         self.inputs = inputs
+        self.params = params
         self.method = method
 
     def run(self):
@@ -19,12 +22,20 @@ class Worker(Process):
         os.environ["CUDA_VISIBLE_DEVICES"] = str(self.gpuid)
 
         if self.method == 'extract_patches':
-            extract_patches(self.inputs)
+            extract_patches(self.inputs, self.params)
         elif self.method == 'build_trajectories':
-            build_trajectories(self.inputs)
+            build_trajectories(self.inputs, self.params)
 
 
 def main(arguments_):
+
+    # Configurations
+    params = DynaMorphConfig()
+    if arguments_.param:
+        extra_params_dict = json.load(open(arguments_.param, "r"))
+        params.update(extra_params_dict)
+        for k in extra_params_dict:
+            print("Using parameter %s: %s" % (str(k), str(extra_params_dict[k])))
 
     print("CLI arguments provided")
     raw = arguments_.raw
@@ -64,7 +75,7 @@ def main(arguments_):
     for i in range(n_gpu):
         _sites = segment_sites[sep[i]:sep[i + 1]]
         args = (raw, supp, None, _sites)
-        p = Worker(args, gpuid=i, method=method)
+        p = Worker(args, params, gpuid=i, method=method)
         p.start()
         processes.append(p)
     for p in processes:
@@ -112,6 +123,13 @@ def parse_args():
         required=False,
         help="list of field-of-views to process (subfolders in raw data directory)",
     )
+    parser.add_argument(
+        '-p', '--param',
+        type=str,
+        required=False,
+        help="Path to the json file for configuration",
+    )
+
     return parser.parse_args()
 
 

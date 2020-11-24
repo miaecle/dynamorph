@@ -10,11 +10,12 @@ from torch.utils.data import TensorDataset
 
 from SingleCellPatch.generate_trajectories import process_site_build_trajectory
 from SingleCellPatch.extract_patches import process_site_extract_patches
-
 from HiddenStateExtractor.vq_vae import VQ_VAE, prepare_dataset_v2, rescale
+from params import DynaMorphConfig
 
+default_conf = DynaMorphConfig()
 
-def extract_patches(paths):
+def extract_patches(paths, params=default_conf):
     """ Helper function for patch extraction
 
     Wrapper method `process_site_extract_patches` will be called, which 
@@ -29,6 +30,9 @@ def extract_patches(paths):
             1 - folder for supplementary data
             2 - path to model weight (not used in this method)
             3 - list of site names
+        params (DynaMorphConfig, optional): config dict of dynamorph parameters
+            requiring key 'PATCH_WINDOW_SIZE'
+
 
     """
 
@@ -48,11 +52,11 @@ def extract_patches(paths):
             process_site_extract_patches(site_path, 
                                          site_segmentation_path, 
                                          site_supp_files_folder,
-                                         window_size=256)
+                                         window_size=params['PATCH_WINDOW_SIZE'])
     return
 
 
-def build_trajectories(paths):
+def build_trajectories(paths, params=default_conf):
     """ Helper function for trajectory building
 
     Wrapper method `process_site_build_trajectory` will be called, which 
@@ -69,6 +73,8 @@ def build_trajectories(paths):
             1 - folder for supplementary data
             2 - path to model weight (not used in this method)
             3 - list of site names
+        params (DynaMorphConfig, optional): config dict of dynamorph parameters
+
 
     """
 
@@ -86,7 +92,7 @@ def build_trajectories(paths):
     return
 
 
-def assemble_VAE(paths):
+def assemble_VAE(paths, params=default_conf):
     """ Wrapper method for prepare dataset for VAE encoding
 
     This function loads data from multiple sites, adjusts intensities to correct
@@ -104,11 +110,14 @@ def assemble_VAE(paths):
             1 - folder for supplementary data
             2 - path to model weight (not used in this method)
             3 - list of site names
+        params (DynaMorphConfig, optional): config dict of dynamorph parameters
+            requiring key 'PATCH_MAXS', 'PATCH_MEANS', 'PATCH_STDS'
 
     """
 
     # these sites should be from a single condition (C5, C4, B-wells, etc..)
     summary_folder, supp_folder, model_path, sites = paths[0], paths[1], paths[2], paths[3]
+
     assert len(set(site[:2] for site in sites)) == 1, \
         "Sites should be from a single well/condition"
     well = sites[0][:2]
@@ -122,30 +131,24 @@ def assemble_VAE(paths):
         dat_fs.extend([os.path.join(supp_files_folder, f) \
             for f in os.listdir(supp_files_folder) if f.startswith('stacks')])
 
-    dataset, fs = prepare_dataset_v2(dat_fs, cs=[0, 1])
+    dataset, fs = prepare_dataset_v2(dat_fs, 
+                                     cs=[0, 1], 
+                                     input_shape=params['VAE_INPUT_SHAPE'], 
+                                     channel_max=params['PATCH_MAXS'],
+                                     normalize=True,
+                                     normalize_param=params)
     assert fs == sorted(fs)
     
     print(f"\tsaving {os.path.join(summary_folder, '%s_file_paths.pkl' % well)}")
     with open(os.path.join(summary_folder, '%s_file_paths.pkl' % well), 'wb') as f:
         pickle.dump(fs, f)
 
-    print(f"\tsaving {os.path.join(summary_folder, '%s_static_patches.pt' % well)}")
-    torch.save(dataset, os.path.join(summary_folder, '%s_static_patches.pt' % well))
-
-    # Adjust channel mean/std
-    # phase: 0.4980 plus/minus 0.0257
-    # retardance: 0.0285 plus/minus 0.0261, only adjust for mean
-    phase_slice = dataset.tensors[0][:, 0]
-    phase_slice = ((phase_slice - phase_slice.mean()) / phase_slice.std()) * 0.0257 + 0.4980
-    retard_slice = dataset.tensors[0][:, 1]
-    retard_slice = retard_slice / retard_slice.mean() * 0.0285
-    adjusted_dataset = TensorDataset(torch.stack([phase_slice, retard_slice], 1))
     print(f"\tsaving {os.path.join(summary_folder, '%s_adjusted_static_patches.pt' % well)}")
-    torch.save(adjusted_dataset, os.path.join(summary_folder, '%s_adjusted_static_patches.pt' % well))
+    torch.save(dataset, os.path.join(summary_folder, '%s_adjusted_static_patches.pt' % well))
     return
 
 
-def process_VAE(paths):
+def process_VAE(paths, params=default_conf):
     """ Wrapper method for VAE encoding
 
     This function loads prepared dataset and applies trained VAE to encode 
@@ -165,10 +168,13 @@ def process_VAE(paths):
             1 - folder for supplementary data
             2 - path to VQ-VAE model weight
             3 - list of site names
-
+        params (DynaMorphConfig, optional): config dict of dynamorph parameters
+            requiring all VQ-VAE model parameters
+            
     """
     # these sites should be from a single condition (C5, C4, B-wells, etc..)
     summary_folder, supp_folder, model_path, sites = paths[0], paths[1], paths[2], paths[3]
+
     assert len(set(site[:2] for site in sites)) == 1, \
         "Sites should be from a single well/condition"
     well = sites[0][:2]
@@ -178,9 +184,8 @@ def process_VAE(paths):
 
     print(f"\tloading static patches {os.path.join(summary_folder, '%s_adjusted_static_patches.pt' % well)}")
     dataset = torch.load(os.path.join(summary_folder, '%s_adjusted_static_patches.pt' % well))
-    dataset = rescale(dataset)
     
-    model = VQ_VAE(alpha=0.0005, gpu=True)
+    model = VQ_VAE(params=params, gpu=True)
     model = model.cuda()
     try:
         if not model_path is None:
@@ -213,7 +218,7 @@ def process_VAE(paths):
     return
 
 
-def process_PCA(paths):
+def process_PCA(paths, params=default_conf):
     """ Wrapper method for PCA dimension reduction
 
     This function loads latent vectors generated by VQ-VAE and applies trained
@@ -235,10 +240,12 @@ def process_PCA(paths):
             1 - folder for supplementary data
             2 - path to PCA weight
             3 - list of site names
+        params (DynaMorphConfig, optional): config dict of dynamorph parameters
 
     """
     # these sites should be from a single condition (C5, C4, B-wells, etc..)
     summary_folder, supp_folder, model_path, sites = paths[0], paths[1], paths[2], paths[3]
+
     assert len(set(site[:2] for site in sites)) == 1, \
         "Sites should be from a single well/condition"
     well = sites[0][:2]
@@ -266,7 +273,7 @@ def process_PCA(paths):
     return
 
 
-def trajectory_matching(paths):
+def trajectory_matching(paths, params=default_conf):
     """ Helper function for assembling frame IDs to trajectories
 
     This function loads saved static frame identifiers ("*_file_paths.pkl") and 
@@ -282,10 +289,12 @@ def trajectory_matching(paths):
             1 - folder for supplementary data
             2 - path to model weight (not used in this method)
             3 - list of site names
+        params (DynaMorphConfig, optional): config dict of dynamorph parameters
 
     """
 
     summary_folder, supp_folder, model_path, sites = paths[0], paths[1], paths[2], paths[3]
+
     assert len(set(site[:2] for site in sites)) == 1, \
         "Sites should be from a single well/condition"
     well = sites[0][:2]

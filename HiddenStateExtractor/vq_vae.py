@@ -10,12 +10,13 @@ import torch.nn.functional as F
 import pickle
 from torch.utils.data import TensorDataset, DataLoader
 from scipy.sparse import csr_matrix
+
+# Switch to root folder if import below doesn't work
 from .naive_imagenet import read_file_path
+from .generate_trajectory_relations import generate_trajectory_relations
+from params import DynaMorphConfig
 
-
-CHANNEL_RANGE = [(0.3, 0.8), (0., 0.6)] 
-CHANNEL_VAR = np.array([0.0475, 0.0394]) # After normalized to CHANNEL_RANGE
-CHANNEL_MAX = np.array([65535., 65535.])
+default_conf = DynaMorphConfig()
 eps = 1e-9
 
 
@@ -230,43 +231,39 @@ class VQ_VAE(nn.Module):
         "Neural Discrete Representation Learning"
     """
     def __init__(self,
-                 num_inputs=2,
-                 num_hiddens=16,
-                 num_residual_hiddens=32,
-                 num_residual_layers=2,
-                 num_embeddings=64,
-                 commitment_cost=0.25,
-                 channel_var=CHANNEL_VAR,
-                 alpha=0.005,
+                 params=default_conf,
                  gpu=True,
                  **kwargs):
         """ Initialize the model
 
         Args:
-            num_inputs (int, optional): number of channels in input
-            num_hiddens (int, optional): number of hidden units (size of latent 
-                encodings per position)
-            num_residual_hiddens (int, optional): number of hidden units in the
-                residual layer
-            num_residual_layers (int, optional): number of residual layers
-            num_embeddings (int, optional): number of VQ embedding vectors
-            commitment_cost (float, optional): balance between latent losses
-            channel_var (list of float, optional): each channel's SD, used for 
-                balancing loss across channels
-            alpha (float, optional): balance of matching loss
+            params (DynaMorphConfig, optional): configuration dict, containing:
+                VAE_NUM_HIDDENS (int): number of hidden units (size of latent 
+                    encodings per position)
+                VAE_NUM_RESIDUAL_HIDDENS (int): number of hidden units in the 
+                    residual layer
+                VAE_NUM_RESIDUAL_LAYERS (int): number of residual layers
+                VAE_NUM_EMBEDDINGS (int): number of VQ embedding vectors
+                VAE_COMMITEMENT_COST (float): balance between latent losses
+                PATCH_STDS (list of float): each channel's SD, used 
+                    for balancing loss across channels
+                VAE_ALPHA (float): balance of matching loss
             gpu (bool, optional): if the model is run on gpu
             **kwargs: other keyword arguments
 
         """
+
+
         super(VQ_VAE, self).__init__(**kwargs)
-        self.num_inputs = num_inputs
-        self.num_hiddens = num_hiddens
-        self.num_residual_layers = num_residual_layers
-        self.num_residual_hiddens = num_residual_hiddens
-        self.num_embeddings = num_embeddings
-        self.commitment_cost = commitment_cost
-        self.channel_var = nn.Parameter(t.from_numpy(channel_var).float().reshape((1, num_inputs, 1, 1)), requires_grad=False)
-        self.alpha = alpha
+        self.num_inputs = len(params['PATCH_STDS'])
+        self.num_hiddens = params['VAE_NUM_HIDDENS']
+        self.num_residual_layers = params['VAE_NUM_RESIDUAL_LAYERS']
+        self.num_residual_hiddens = params['VAE_NUM_RESIDUAL_HIDDENS']
+        self.num_embeddings = params['VAE_NUM_EMBEDDINGS']
+        self.commitment_cost = params['VAE_COMMITEMENT_COST']
+        self.channel_var = nn.Parameter(t.from_numpy(params['PATCH_STDS']).float().reshape((1, self.num_inputs, 1, 1)), requires_grad=False)
+        self.alpha = params['VAE_ALPHA']
+
         self.enc = nn.Sequential(
             nn.Conv2d(self.num_inputs, self.num_hiddens//2, 1),
             nn.Conv2d(self.num_hiddens//2, self.num_hiddens//2, 4, stride=2, padding=1),
@@ -339,35 +336,31 @@ class VQ_VAE(nn.Module):
 class VAE(nn.Module):
     """ Regular VAE """
     def __init__(self,
-                 num_inputs=2,
-                 num_hiddens=16,
-                 num_residual_hiddens=32,
-                 num_residual_layers=2,
-                 channel_var=CHANNEL_VAR,
-                 alpha=0.005,
+                 params=default_conf,
                  **kwargs):
         """ Initialize the model
 
         Args:
-            num_inputs (int, optional): number of channels in input
-            num_hiddens (int, optional): number of hidden units (size of latent 
-                encodings per position)
-            num_residual_hiddens (int, optional): number of hidden units in the
-                residual layer
-            num_residual_layers (int, optional): number of residual layers
-            channel_var (list of float, optional): each channel's SD, used for 
-                balancing loss across channels
-            alpha (float, optional): balance of matching loss
+            params (DynaMorphConfig, optional): configuration dict, containing:
+                VAE_NUM_HIDDENS (int): number of hidden units (size of latent 
+                    encodings per position)
+                VAE_NUM_RESIDUAL_HIDDENS (int): number of hidden units in the 
+                    residual layer
+                VAE_NUM_RESIDUAL_LAYERS (int): number of residual layers
+                PATCH_STDS (list of float): each channel's SD, used 
+                    for balancing loss across channels
+                VAE_ALPHA (float): balance of matching loss
             **kwargs: other keyword arguments
 
         """
         super(VAE, self).__init__(**kwargs)
-        self.num_inputs = num_inputs
-        self.num_hiddens = num_hiddens
-        self.num_residual_layers = num_residual_layers
-        self.num_residual_hiddens = num_residual_hiddens
-        self.channel_var = nn.Parameter(t.from_numpy(channel_var).float().reshape((1, num_inputs, 1, 1)), requires_grad=False)
-        self.alpha = alpha
+        self.num_inputs = len(params['PATCH_STDS'])
+        self.num_hiddens = params['VAE_NUM_HIDDENS']
+        self.num_residual_layers = params['VAE_NUM_RESIDUAL_LAYERS']
+        self.num_residual_hiddens = params['VAE_NUM_RESIDUAL_HIDDENS']
+        self.channel_var = nn.Parameter(t.from_numpy(params['PATCH_STDS']).float().reshape((1, self.num_inputs, 1, 1)), requires_grad=False)
+        self.alpha = params['VAE_ALPHA']
+
         self.enc = nn.Sequential(
             nn.Conv2d(self.num_inputs, self.num_hiddens//2, 1),
             nn.Conv2d(self.num_hiddens//2, self.num_hiddens//2, 4, stride=2, padding=1),
@@ -461,16 +454,18 @@ class IWAE(VAE):
     """ Importance Weighted Autoencoder as introduced in 
         "Importance Weighted Autoencoders"
     """
-    def __init__(self, k=5, **kwargs):
+    def __init__(self, params=default_conf, **kwargs):
         """ Initialize the model
 
         Args:
-            k (int, optional): number of sampling trials
-            **kwargs: other keyword arguments (including arguments for `VAE`)
+            params (DynaMorphConfig, optional): configuration dict, containing:
+                All parameters required for VAE class
+                VAE_SAMPLING_K (int): number of sampling trials
+            **kwargs: other keyword arguments
 
         """
-        super(IWAE, self).__init__(**kwargs)
-        self.k = k
+        super(IWAE, self).__init__(params=params, **kwargs)
+        self.k = params["VAE_SAMPLING_K"]
         self.rp = Reparametrize_IW(k=self.k)
 
     def forward(self, inputs, time_matching_mat=None, batch_mask=None):
@@ -536,35 +531,31 @@ class AAE(nn.Module):
         "Adversarial Autoencoders"
     """
     def __init__(self,
-                 num_inputs=2,
-                 num_hiddens=16,
-                 num_residual_hiddens=32,
-                 num_residual_layers=2,
-                 channel_var=CHANNEL_VAR,
-                 alpha=0.005,
+                 params=default_conf,
                  **kwargs):
         """ Initialize the model
 
         Args:
-            num_inputs (int, optional): number of channels in input
-            num_hiddens (int, optional): number of hidden units (size of latent 
-                encodings per position)
-            num_residual_hiddens (int, optional): number of hidden units in the
-                residual layer
-            num_residual_layers (int, optional): number of residual layers
-            channel_var (list of float, optional): each channel's SD, used for 
-                balancing loss across channels
-            alpha (float, optional): balance of matching loss
+            params (DynaMorphConfig, optional): configuration dict, containing:
+                VAE_NUM_HIDDENS (int): number of hidden units (size of latent 
+                    encodings per position)
+                VAE_NUM_RESIDUAL_HIDDENS (int): number of hidden units in the 
+                    residual layer
+                VAE_NUM_RESIDUAL_LAYERS (int): number of residual layers
+                PATCH_STDS (list of float): each channel's SD, used 
+                    for balancing loss across channels
+                VAE_ALPHA (float): balance of matching loss
             **kwargs: other keyword arguments
 
         """
         super(AAE, self).__init__(**kwargs)
-        self.num_inputs = num_inputs
-        self.num_hiddens = num_hiddens
-        self.num_residual_layers = num_residual_layers
-        self.num_residual_hiddens = num_residual_hiddens
-        self.channel_var = nn.Parameter(t.from_numpy(channel_var).float().reshape((1, num_inputs, 1, 1)), requires_grad=False)
-        self.alpha = alpha
+        self.num_inputs = len(params['PATCH_STDS'])
+        self.num_hiddens = params['VAE_NUM_HIDDENS']
+        self.num_residual_layers = params['VAE_NUM_RESIDUAL_LAYERS']
+        self.num_residual_hiddens = params['VAE_NUM_RESIDUAL_HIDDENS']
+        self.channel_var = nn.Parameter(t.from_numpy(params['PATCH_STDS']).float().reshape((1, self.num_inputs, 1, 1)), requires_grad=False)
+        self.alpha = params['VAE_ALPHA']
+
         self.enc = nn.Sequential(
             nn.Conv2d(self.num_inputs, self.num_hiddens//2, 1),
             nn.Conv2d(self.num_hiddens//2, self.num_hiddens//2, 4, stride=2, padding=1),
@@ -673,7 +664,12 @@ class AAE(nn.Module):
 
 
 
-def train(model, dataset, relation_mat=None, mask=None, n_epochs=10, lr=0.001, batch_size=16, gpu=True):
+def train(model, 
+          dataset, 
+          relation_mat=None, 
+          mask=None,
+          params=default_conf,
+          gpu=True):
     """ Train function for VQ-VAE, VAE, IWAE, etc.
 
     Args:
@@ -683,15 +679,23 @@ def train(model, dataset, relation_mat=None, mask=None, n_epochs=10, lr=0.001, b
             matrix of pairwise relations
         mask (TensorDataset or None, optional): if given, dataset of training 
             sample weight masks
-        n_epochs (int, optional): number of epochs
-        lr (float, optional): learning rate
-        batch_size (int, optional): batch size
+        params (DynaMorphConfig, optional): configuration dict, containing:
+            TRAIN_N_EPOCHS (int): number of epochs
+            TRAIN_LEARNING_RATE (float): learning rate
+            TRAIN_BATCH_SIZE (int): batch size
+            TRAIN_LOG_FILE (str or None): if given, path for training log file
         gpu (bool, optional): if the model is run on gpu
     
     Returns:
         nn.Module: trained model
 
     """
+
+    n_epochs = params['TRAIN_N_EPOCHS']
+    lr = params['TRAIN_LEARNING_RATE']
+    batch_size = params['TRAIN_BATCH_SIZE']
+    log_file = params['TRAIN_LOG_FILE']
+
     optimizer = t.optim.Adam(model.parameters(), lr=lr, betas=(.9, .999))
     model.zero_grad()
 
@@ -732,8 +736,13 @@ def train(model, dataset, relation_mat=None, mask=None, n_epochs=10, lr=0.001, b
 
             recon_loss.append(loss_dict['recon_loss'])
             perplexities.append(loss_dict['perplexity'])
-        print('epoch %d recon loss: %f perplexity: %f' % \
-            (epoch, sum(recon_loss).item()/len(recon_loss), sum(perplexities).item()/len(perplexities)))
+        log_str = 'epoch %d recon loss: %f perplexity: %f' % \
+            (epoch, sum(recon_loss).item()/len(recon_loss), sum(perplexities).item()/len(perplexities))
+        if log_file is not None:
+            with open(log_file, 'a') as f:
+                f.write(log_str + '\n')
+        else:
+            print(log_str)
     return model
 
 
@@ -741,11 +750,7 @@ def train_adversarial(model,
                       dataset, 
                       relation_mat=None, 
                       mask=None, 
-                      n_epochs=10, 
-                      lr_recon=0.001, 
-                      lr_dis=0.001, 
-                      lr_gen=0.001, 
-                      batch_size=16, 
+                      params=default_conf,
                       gpu=True):
     """ Train function for AAE.
 
@@ -756,18 +761,35 @@ def train_adversarial(model,
             matrix of pairwise relations
         mask (TensorDataset or None, optional): if given, dataset of training 
             sample weight masks
-        n_epochs (int, optional): number of epochs
-        lr_recon (float, optional): learning rate for reconstruction (encoder + 
-            decoder)
-        lr_dis (float, optional): learning rate for discriminator
-        lr_gen (float, optional): learning rate for generator
-        batch_size (int, optional): batch size
+        params (DynaMorphConfig, optional): configuration dict, containing:
+            TRAIN_N_EPOCHS (int): number of epochs
+            TRAIN_LEARNING_RATE (float): learning rate(s)
+                if one float is given, then all learning rates (reconstruction, 
+                discriminator, generator) are set to the same value; 
+                if a list of 3 floats (respectively for reconstruction, 
+                discriminator, generator) is given, then three learning rates 
+                are set accordingly
+            TRAIN_BATCH_SIZE (int): batch size
+            TRAIN_LOG_FILE (str or None): if given, path for training log file
         gpu (bool, optional): if the model is run on gpu
     
     Returns:
         nn.Module: trained model
 
     """
+
+    n_epochs = params['TRAIN_N_EPOCHS']
+    lr = params['TRAIN_LEARNING_RATE']
+    batch_size = params['TRAIN_BATCH_SIZE']
+    log_file = params['TRAIN_LOG_FILE']
+
+    if isinstance(lr, float):
+        lr_recon = lr
+        lr_dis = lr
+        lr_gen = lr
+    elif len(lr) == 3:
+        lr_recon, lr_dis, lr_gen = lr
+
     optim_enc = t.optim.Adam(model.enc.parameters(), lr_recon)
     optim_dec = t.optim.Adam(model.dec.parameters(), lr_recon)
     optim_enc_g = t.optim.Adam(model.enc.parameters(), lr_gen)
@@ -817,11 +839,48 @@ def train_adversarial(model,
 
             recon_loss.append(loss_dict['recon_loss'])
             scores.append(loss_dict2['score'])
-        print('epoch %d recon loss: %f pred score: %f' % (epoch, sum(recon_loss).item()/len(recon_loss), sum(scores).item()/len(scores)))
+        log_str = 'epoch %d recon loss: %f pred score: %f' % (epoch, sum(recon_loss).item()/len(recon_loss), sum(scores).item()/len(scores))
+        if log_file is not None:
+            with open(log_file, 'a') as f:
+                f.write(log_str + '\n')
+        else:
+            print(log_str)
     return model
 
 
-def prepare_dataset(fs, cs=[0, 1], input_shape=(128, 128), channel_max=CHANNEL_MAX):
+def normalize_dataset(combined_tensor,
+                      normalize_param=default_conf):
+    """ Normalize each channel of the dataset
+
+    Args:
+        combined_tensor (Tensor): combined dataset in torch.Tensor form
+            Channel-first structure
+        normalize_param (dict or DynaMorphConfig, optional): 
+            dict containing normalization parameters
+
+    Returns:
+        Tensor: combined dataset tensor after normalization
+
+    """
+    channel_means = normalize_param['PATCH_MEANS']
+    channel_stds = normalize_param['PATCH_STDS']
+    assert len(channel_means) == len(channel_stds) == combined_tensor.shape[1]
+    normalized_slices = []
+    for i_slice in range(len(channel_means)):
+        slic = combined_tensor[:, i_slice]
+        slic = (slic - slic.mean()) / slic.std()
+        slic = slic * channel_stds[i_slice] + channel_means[i_slice]
+        slic = slic.clamp(min=0.0, max=1.0)
+        normalized_slices.append(slic)
+    return t.stack(normalized_slices, 1)
+
+
+def prepare_dataset(fs,
+                    cs=[0, 1], 
+                    input_shape=default_conf['VAE_INPUT_SHAPE'], 
+                    channel_max=default_conf['PATCH_MAXS'],
+                    normalize=False,
+                    normalize_param=default_conf):
     """ Prepare input dataset for VAE
 
     This function reads individual h5 files
@@ -832,6 +891,10 @@ def prepare_dataset(fs, cs=[0, 1], input_shape=(128, 128), channel_max=CHANNEL_M
         cs (list of int, optional): channels in the input
         input_shape (tuple, optional): input shape (height and width only)
         channel_max (np.array, optional): max intensities for channels
+        normalize (bool, optional): if to normalize each channel
+        normalize_param (dict or DynaMorphConfig, optional): 
+            dict containing normalization parameters
+
 
     Returns:
         TensorDataset: dataset of training inputs
@@ -850,14 +913,20 @@ def prepare_dataset(fs, cs=[0, 1], input_shape=(128, 128), channel_max=CHANNEL_M
           c_slice = cv2.resize(np.array(dat[:, :, c]).astype(float), input_shape)
           stacks.append(c_slice/m)
         tensors.append(t.from_numpy(np.stack(stacks, 0)).float())
-    dataset = TensorDataset(t.stack(tensors, 0))
+
+    combined_tensor = t.stack(tensors, 0)
+    if normalize:
+        combined_tensor = normalize_dataset(combined_tensor, normalize_param)
+    dataset = TensorDataset(combined_tensor)
     return dataset
 
 
 def prepare_dataset_from_collection(fs, 
                                     cs=[0, 1], 
-                                    input_shape=(128, 128), 
-                                    channel_max=CHANNEL_MAX,
+                                    input_shape=default_conf['VAE_INPUT_SHAPE'], 
+                                    channel_max=default_conf['PATCH_MAXS'],
+                                    normalize=False,
+                                    normalize_param=default_conf,
                                     file_path='./',
                                     file_suffix='_all_patches.pkl'):
     """ Prepare input dataset for VAE, deprecated
@@ -869,6 +938,9 @@ def prepare_dataset_from_collection(fs,
         cs (list of int, optional): channels in the input
         input_shape (tuple, optional): input shape (height and width only)
         channel_max (np.array, optional): max intensities for channels
+        normalize (bool, optional): if to normalize each channel
+        normalize_param (dict or DynaMorphConfig, optional): 
+            dict containing normalization parameters
         file_path (str, optional): root folder for saved pickle files
         file_suffix (str, optional): suffix of saved pickle files
 
@@ -876,6 +948,7 @@ def prepare_dataset_from_collection(fs,
         TensorDataset: dataset of training inputs
 
     """
+    assert len(cs) == len(channel_max)
 
     tensors = {}
     files = set([f.split('/')[-2] for f in fs])
@@ -891,14 +964,20 @@ def prepare_dataset_from_collection(fs,
                 c_slice = cv2.resize(np.array(dat[:, :, c]).astype(float), input_shape)
                 stacks.append(c_slice/m)
             tensors[f_n] = t.from_numpy(np.stack(stacks, 0)).float()
-    dataset = TensorDataset(t.stack([tensors[f_n] for f_n in fs], 0))
+
+    combined_tensor = t.stack([tensors[f_n] for f_n in fs], 0)
+    if normalize:
+        combined_tensor = normalize_dataset(combined_tensor, normalize_param)
+    dataset = TensorDataset(combined_tensor)
     return dataset
 
 
 def prepare_dataset_v2(dat_fs, 
                        cs=[0, 1],
-                       input_shape=(128, 128),
-                       channel_max=CHANNEL_MAX):
+                       input_shape=default_conf['VAE_INPUT_SHAPE'], 
+                       channel_max=default_conf['PATCH_MAXS'],
+                       normalize=False,
+                       normalize_param=default_conf):
     """ Prepare input dataset for VAE
 
     This function reads assembled pickle files (dict)
@@ -908,12 +987,16 @@ def prepare_dataset_v2(dat_fs,
         cs (list of int, optional): channels in the input
         input_shape (tuple, optional): input shape (height and width only)
         channel_max (np.array, optional): max intensities for channels
+        normalize (bool, optional): if to normalize each channel
+        normalize_param (dict or DynaMorphConfig, optional): 
+            dict containing normalization parameters
 
     Returns:
         TensorDataset: dataset of training inputs
         list of str: identifiers of single cell image patches
 
     """
+    assert len(cs) == len(channel_max)
     tensors = {}
     for dat_f in dat_fs:
         print(f"\tloading data {dat_f}")
@@ -928,7 +1011,11 @@ def prepare_dataset_v2(dat_fs,
                 stacks.append(c_slice/m)
             tensors[k] = t.from_numpy(np.stack(stacks, 0)).float()
     fs = sorted(tensors.keys())
-    dataset = TensorDataset(t.stack([tensors[f_n] for f_n in fs], 0))
+
+    combined_tensor = t.stack([tensors[f_n] for f_n in fs], 0)
+    if normalize:
+        combined_tensor = normalize_dataset(combined_tensor, normalize_param)
+    dataset = TensorDataset(combined_tensor)
     return dataset, fs
 
 
@@ -998,7 +1085,9 @@ def reorder_with_trajectories(dataset, relations, seed=None):
 
 
 def rescale(dataset):
-    """ Rescale value range of image patches in `dataset` to CHANNEL_RANGE
+    """ (deprecated) Rescale value range of image patches in `dataset` to CHANNEL_RANGE
+
+    Deprecated, this function is now combined into prepare dataset methods
 
     Args:
         dataset (TensorDataset): dataset before rescaling
@@ -1007,6 +1096,7 @@ def rescale(dataset):
         TensorDataset: dataset after rescaling
 
     """
+    CHANNEL_RANGE = [(0.3, 0.8), (0., 0.6)] 
     tensor = dataset.tensors[0]
     assert len(CHANNEL_RANGE) == tensor.shape[1]
     channel_slices = []
@@ -1020,7 +1110,7 @@ def rescale(dataset):
 
 
 def resscale_backward(tensor):
-    """ Reverse operation of `rescale`
+    """ (deprecated) Reverse operation of `rescale`
 
     Args:
         dataset (TensorDataset): dataset after rescaling
@@ -1029,6 +1119,7 @@ def resscale_backward(tensor):
         TensorDataset: dataset before rescaling
 
     """
+    CHANNEL_RANGE = [(0.3, 0.8), (0., 0.6)] 
     assert len(tensor.shape) == 4
     assert len(CHANNEL_RANGE) == tensor.shape[1]
     channel_slices = []
@@ -1041,40 +1132,103 @@ def resscale_backward(tensor):
 
 
 if __name__ == '__main__':
+    """ Script below requires individual cell patches and their segmentation masks
+    
+    Starting from DynaMorph pipeline step 7
+    """
+
     ### Settings ###
     cs = [0, 1]
     cs_mask = [2, 3]
-    input_shape = (128, 128)
     gpu = True
-    path = '/mnt/comp_micro/Projects/CellVAE'
+    config = DynaMorphConfig()
 
-    ### Load Data ###
-    fs = read_file_path(path + '/Data/StaticPatches')
+    summary_folder = None
+    supp_folder = None
+    sites = []
 
-    dataset = prepare_dataset(fs, cs=cs, input_shape=input_shape, channel_max=CHANNEL_MAX)
-    dataset_mask = prepare_dataset(fs, cs=cs_mask, input_shape=input_shape, channel_max=[1., 1.])
+    ### Prepare Data ###
+    wells = set(s[:2] for s in sites)
+    well_data = {}
+    for well in wells:
+        well_sites = [s for s in sites if s[:2] == well]
+        dat_fs = []
+        for site in well_sites:
+            supp_files_folder = os.path.join(supp_folder, '%s-supps' % well, '%s' % site)
+            dat_fs.extend([os.path.join(supp_files_folder, f) \
+                for f in os.listdir(supp_files_folder) if f.startswith('stacks')])
+        dataset, fs = prepare_dataset_v2(dat_fs, 
+                                         cs=cs, 
+                                         input_shape=config['VAE_INPUT_SHAPE'], 
+                                         channel_max=config['PATCH_MAXS'],
+                                         normalize=True,
+                                         normalize_param=config)
+        dataset_mask, fs2 = prepare_dataset_v2(dat_fs, 
+                                               cs=cs_mask, 
+                                               input_shape=config['VAE_INPUT_SHAPE'], 
+                                               channel_max=[1., 1.],
+                                               normalize=False)
+        assert fs == fs2
+        assert fs == sorted(fs)
+
+        t.save(dataset, os.path.join(summary_folder, '%s_adjusted_static_patches.pt' % well))
+        t.save(dataset_mask, os.path.join(summary_folder, '%s_static_patches_mask.pt' % well))
+        with open(os.path.join(summary_folder, '%s_file_paths.pkl' % well), 'wb') as f:
+            pickle.dump(fs, f)
+
+        relations = generate_trajectory_relations(well_sites, summary_folder, supp_folder)
+
+        # dataset = t.load(os.path.join(summary_folder, '%s_adjusted_static_patches.pt' % well))
+        # dataset_mask = t.load(os.path.join(summary_folder, '%s_static_patches_mask.pt' % well))
+        # fs = pickle.load(open(os.path.join(summary_folder, "%s_file_paths.pkl" % well), 'rb'))
+        # relations = pickle.load(open(os.path.join(summary_folder, "%s_static_patches_relations.pkl" % well), 'rb'))
+
+        well_data[well] = (dataset, dataset_mask, fs, relations)
+
+
+    ### Merge Training Data ###
+    merged_tensor = []
+    merged_mask_tensor = []
+    merged_fs = []
+    cumsum = 0
+    merged_relations = {}
+
+    for well in sorted(well_data):
+        dataset, dataset_mask, fs, relations = well_data[well]
+        merged_tensor.append(dataset.tensors[0])
+        merged_mask_tensor.append(dataset_mask.tensors[0])
+        merged_fs.extend(fs)
+        for k in relations:
+            merged_relations[(k[0] + cumsum, k[1] + cumsum)] = relations[k]
+        cumsum += len(fs)
+
+    merged_tensor = t.cat(merged_tensor, 0)
+    merged_mask_tensor = t.cat(merged_mask_tensor, 0)
+    merged_dataset = TensorDataset(merged_tensor)
+    merged_dataset, relation_mat, inds_in_order = reorder_with_trajectories(
+        merged_dataset, merged_relations, seed=123)
+    merged_dataset_mask = TensorDataset(merged_mask_tensor[np.array(inds_in_order)])
     
-    # Note that `relations` is depending on the order of fs (should not sort)
-    # `relations` is generated by script "generate_trajectory_relations.py"
-    relations = pickle.load(open(path + '/Data/StaticPatchesAllRelations.pkl', 'rb'))
-    dataset, relation_mat, inds_in_order = reorder_with_trajectories(dataset, relations, seed=123)
-    dataset_mask = TensorDataset(dataset_mask.tensors[0][np.array(inds_in_order)])
-    dataset = rescale(dataset)
-    
+
     ### Initialize Model ###
-    model = VQ_VAE(alpha=0.0005)
+    model = VQ_VAE(params=config, gpu=gpu)
     if gpu:
         model = model.cuda()
+
+
+    ### Model Training ###
     model = train(model, 
-                  dataset, 
+                  merged_dataset, 
                   relation_mat=relation_mat, 
-                  mask=dataset_mask,
-                  n_epochs=500, 
-                  lr=0.0001, 
-                  batch_size=128, 
+                  mask=merged_dataset_mask,
+                  params=config,
                   gpu=gpu)
     t.save(model.state_dict(), 'temp.pt')
-    
+
+
+
+    """ Some helper functions below """
+
     ### Check coverage of embedding vectors ###
     used_indices = []
     for i in range(500):
@@ -1083,6 +1237,7 @@ if __name__ == '__main__':
         indices = model.vq.encode_inputs(z_before)
         used_indices.append(np.unique(indices.cpu().data.numpy()))
     print(np.unique(np.concatenate(used_indices)))
+
 
     ### Generate latent vectors ###
     z_bs = {}

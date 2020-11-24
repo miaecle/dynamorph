@@ -6,9 +6,11 @@ from NNsegmentation.data import predict_whole_map
 from keras import backend as K
 import tensorflow as tf
 from SingleCellPatch.extract_patches import process_site_instance_segmentation
+from params import DynaMorphConfig
 
+default_conf = DynaMorphConfig()
 
-def segmentation(paths):
+def segmentation(paths, params=default_conf):
     """ Wrapper method for semantic segmentation
 
     This method performs predicion on all specified sites included in the input paths.
@@ -25,6 +27,7 @@ def segmentation(paths):
             1 - folder for supplementary data
             2 - path to model weight (not used in this method)
             3 - list of site names
+        params (DynaMorphConfig, optional): config dict of dynamorph parameters
 
     """
         
@@ -53,10 +56,12 @@ def segmentation(paths):
                 # Generate semantic segmentation
                 predict_whole_map(site_path, model, n_classes=3, batch_size=8, n_supp=5)
             except Exception as e:
+                print(e)
                 print("Error in predicting site %s" % site, flush=True)
     return
 
-def instance_segmentation(paths):
+
+def instance_segmentation(paths, params=default_conf):
     """ Helper function for instance segmentation
 
     Wrapper method `process_site_instance_segmentation` will be called, which
@@ -73,6 +78,7 @@ def instance_segmentation(paths):
             1 - folder for supplementary data
             2 - path to model weight (not used in this method)
             3 - list of site names
+        params (DynaMorphConfig, optional): config dict of dynamorph parameters
 
     """
 

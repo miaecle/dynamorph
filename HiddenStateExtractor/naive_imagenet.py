@@ -4,9 +4,9 @@ import h5py
 import pickle
 import cv2
 
+from params import DynaMorphConfig
 
-CHANNEL_MAX = [65535., 65535.]
-
+default_conf = DynaMorphConfig()
 
 def read_file_path(root):
     """ Find all .h5 files
@@ -61,7 +61,7 @@ def initiate_model_inception():
     return model, preprocess_fn
 
 
-def preprocess(f_n, cs=[0, 1], channel_max=CHANNEL_MAX):
+def preprocess(f_n, cs=[0, 1], channel_max=default_conf['PATCH_MAXS']):
     """ Preprocessing function (before model-specific preprocess_fn)
 
     Args:
@@ -92,7 +92,7 @@ def predict(fs,
             preprocess_fn, 
             batch_size=128, 
             cs=[0, 1],
-            channel_max=CHANNEL_MAX):
+            channel_max=default_conf['PATCH_MAXS']):
     """ Use ImageNet pretrained model to encode inputs
 
     Args:
@@ -108,6 +108,7 @@ def predict(fs,
 
     """
     temp_xs = []
+    ys = []
     for ct, f_n in enumerate(fs):
         if ct > 0 and ct % 1000 == 0:
             print(ct)
@@ -133,7 +134,7 @@ def predict(fs,
 #     path = '/mnt/comp_micro/Projects/CellVAE'
 #     fs = read_file_path(os.path.join(path, 'Data', 'StaticPatches'))
 #     extractor, preprocess_fn = initiate_model()
-#     ys = predict(fs, extractor, preprocess_fn, cs=[0, 1], channel_max=CHANNEL_MAX)
+#     ys = predict(fs, extractor, preprocess_fn, cs=[0, 1], channel_max=default_conf['PATCH_MAXS'])
     
 #     output = {}
 #     for f_n, y in zip(fs, ys):

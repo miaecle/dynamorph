@@ -14,9 +14,9 @@ import random
 import os
 import cmath
 import matplotlib.pyplot as plt
-from .naive_imagenet import preprocess, read_file_path, CHANNEL_MAX
 import multiprocessing as mp
 
+from .naive_imagenet import preprocess, read_file_path, CHANNEL_MAX
 
 def extract_features(x, vector_size=32):
     """ Calculate KAZE features for input image

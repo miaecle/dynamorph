@@ -66,4 +66,4 @@ def generate_trajectory_relations(sites, raw_folder, supp_folder):
 
     with open(os.path.join(raw_folder, "%s_static_patches_relations.pkl" % well), 'wb') as f:
         pickle.dump(relations, f)
-    return
+    return relations

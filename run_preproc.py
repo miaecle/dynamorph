@@ -34,6 +34,7 @@ def main(arguments_):
             print(f"writing {site} to {out}", flush=True)
             write_raw_to_npy(path, site, out, multipage=True)
         except Exception as e:
+            print(e)
             print(f"\terror in writing {site}", flush=True)
 
 
