@@ -4,18 +4,27 @@ import os
 os.environ['KERAS_BACKEND'] = 'tensorflow'
 import pickle
 import torch
-import re
 import numpy as np
-import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
 from torch.utils.data import TensorDataset
 
-from SingleCellPatch.generate_trajectories import process_site_build_trajectory
-from SingleCellPatch.extract_patches import process_site_extract_patches, im_adjust
+from SingleCellPatch.extract_patches import process_site_extract_patches
+from SingleCellPatch.generate_trajectories import process_site_build_trajectory, process_well_generate_trajectory_relations
 
-from run_training import VQ_VAE_z32, prepare_dataset_v2, zscore
+from HiddenStateExtractor.vq_vae import VQ_VAE
+from HiddenStateExtractor.vq_vae_supp import prepare_dataset_v2, vae_preprocess
 
 
-def extract_patches(paths):
+def extract_patches(summary_folder: str,
+                    supp_folder: str,
+                    channels: list,
+                    model_path: str,
+                    sites: list,
+                    window_size: int = 256,
+                    save_fig: bool = False,
+                    reload: bool = True,
+                    skip_boundary: bool = False,
+                    **kwargs):
     """ Helper function for patch extraction
 
     Wrapper method `process_site_extract_patches` will be called, which 
@@ -25,15 +34,21 @@ def extract_patches(paths):
         "stacks_*.pkl": single cell patches for each time slice
 
     Args:
-        paths (list): list of paths, containing:
-            0 - folder for raw data, segmentation and summarized results
-            1 - folder for supplementary data
-            2 - path to model weight (not used in this method)
-            3 - list of site names
+        summary_folder (str): folder for raw data, segmentation and 
+            summarized results
+        supp_folder (str): folder for supplementary data
+        channels (list of int): indices of channels used for segmentation 
+            (not used, by default all channels should be saved)
+        model_path (str, optional): path to model weight (not used)
+        sites (list of str): list of site names
+        window_size (int, optional): default=256, x, y size of the patch
+        save_fig (bool, optional): if to save extracted patches (with 
+            segmentation mask)
+        reload (bool, optional): if to load existing stack dat files
+        skip_boundary (bool, optional): if to skip patches whose edges exceed
+            the image size (do not pad)
 
     """
-
-    summary_folder, supp_folder, model_path, sites = paths[0], paths[1], paths[2], paths[3]
 
     for site in sites:
         site_path = os.path.join(summary_folder + '/' + site + '.npy')
@@ -49,12 +64,20 @@ def extract_patches(paths):
             process_site_extract_patches(site_path, 
                                          site_segmentation_path, 
                                          site_supp_files_folder,
-                                         window_size=256,
-                                         save_fig=True)
+                                         window_size=window_size,
+                                         save_fig=save_fig,
+                                         reload=reload,
+                                         skip_boundary=skip_boundary,
+                                         **kwargs)
     return
 
 
-def build_trajectories(paths):
+def build_trajectories(summary_folder: str,
+                       supp_folder: str,
+                       channels: list,
+                       model_path: str,
+                       sites: list,
+                       **kwargs):
     """ Helper function for trajectory building
 
     Wrapper method `process_site_build_trajectory` will be called, which 
@@ -66,15 +89,15 @@ def build_trajectories(paths):
             trajectory positions are dict of t_point: cell center position
 
     Args:
-        paths (list): list of paths, containing:
-            0 - folder for raw data, segmentation and summarized results
-            1 - folder for supplementary data
-            2 - path to model weight (not used in this method)
-            3 - list of site names
+        summary_folder (str): folder for raw data, segmentation and 
+            summarized results
+        supp_folder (str): folder for supplementary data
+        channels (list of int): indices of channels used for segmentation 
+            (not used)
+        model_path (str, optional): path to model weight (not used)
+        sites (list of str): list of site names
 
     """
-
-    summary_folder, supp_folder, model_path, sites = paths[0], paths[1], paths[2], paths[3]
 
     for site in sites:
         site_path = os.path.join(summary_folder + '/' + site + '.npy')
@@ -83,75 +106,16 @@ def build_trajectories(paths):
             print("Site data not found %s" % site_path, flush=True)
         else:
             print("Building trajectories %s" % site_path, flush=True)
-            process_site_build_trajectory(site_supp_files_folder)
-
+            process_site_build_trajectory(site_supp_files_folder, **kwargs)
     return
 
 
-def generate_trajectory_relations(paths):
-    """ Find pair relations (adjacent frame, same trajectory) in static patches
-
-    Results will be saved under `raw_folder`
-
-    Args:
-        sites (list of str): sites from the same well
-        raw_folder (str): path to save image stacks, segmentation stacks, etc.
-        supp_folder (str): path to save supplementary data
-
-    """
-
-    raw_folder, supp_folder, model_path, sites = paths[0], paths[1], paths[2], paths[3]
-
-    assert len(set(s[:2] for s in sites)) == 1
-    well = sites[0][:2]
-    fs = pickle.load(open(os.path.join(raw_folder, "%s_file_paths.pkl" % well), 'rb'))
-    relations = {}
-
-    def get_patch_id(fs, key):
-        """Return the index of the patch given its key"""
-        inds = []
-        for i, f in enumerate(fs):
-            if key in f:
-                inds.append(i)
-        return inds[0] if len(inds) == 1 else None
-
-    for site in sites:
-        print('site:', site)
-        trajectories = pickle.load(open(
-            os.path.join(supp_folder, "%s-supps" % well, site, "cell_traj.pkl"), 'rb'))[0]
-        print('trajectories:', trajectories)
-        # print('fs:', fs)
-        for trajectory in trajectories:
-            t_ids = sorted(trajectory.keys())
-            patch_ids = []
-            for t_idx in t_ids:
-                # get reference patch ID
-                ref_patch_id = get_patch_id(fs, '/%s/%d_%d.' % (site, t_idx, trajectory[t_idx]))
-                if ref_patch_id is None:
-                    print('/%s/%d_%d.' % (site, t_idx, trajectory[t_idx]))
-                assert not ref_patch_id is None
-                patch_ids.append(ref_patch_id)
-                # Adjacent frames
-                if t_idx - 1 in t_ids:
-                    adj_patch_id = get_patch_id(fs, '/%s/%d_%d.' % (site, t_idx - 1, trajectory[t_idx - 1]))
-                    relations[(ref_patch_id, adj_patch_id)] = 2
-                if t_idx + 1 in t_ids:
-                    adj_patch_id = get_patch_id(fs, '/%s/%d_%d.' % (site, t_idx + 1, trajectory[t_idx + 1]))
-                    relations[(ref_patch_id, adj_patch_id)] = 2
-
-            # Same trajectory
-            for i in patch_ids:
-                for j in patch_ids:
-                    if not (i, j) in relations:
-                        relations[(i, j)] = 1
-
-    print('relations:', relations)
-    with open(os.path.join(raw_folder, "%s_static_patches_relations.pkl" % well), 'wb') as f:
-        pickle.dump(relations, f)
-    return
-
-
-def assemble_VAE(paths):
+def assemble_VAE(summary_folder: str,
+                 supp_folder: str,
+                 channels: list,
+                 model_path: str,
+                 sites: list,
+                 **kwargs):
     """ Wrapper method for prepare dataset for VAE encoding
 
     This function loads data from multiple sites, adjusts intensities to correct
@@ -164,16 +128,17 @@ def assemble_VAE(paths):
             after adjusting phase/retardance intensities (avoid batch effect)
 
     Args:
-        paths (list): list of paths, containing:
-            0 - folder for raw data, segmentation and summarized results
-            1 - folder for supplementary data
-            2 - path to model weight (not used in this method)
-            3 - list of site names
+        summary_folder (str): folder for raw data, segmentation and 
+            summarized results
+        supp_folder (str): folder for supplementary data
+        channels (list of int): indices of channels used for segmentation 
+            (not used)
+        model_path (str, optional): path to model weight (not used)
+        sites (list of str): list of site names
 
     """
 
-    # these sites should be from a single condition (C5, C4, B-wells, etc..)
-    summary_folder, supp_folder, model_path, sites = paths[0], paths[1], paths[2], paths[3]
+    # sites should be from a single condition (C5, C4, B-wells, etc..)
     assert len(set(site[:2] for site in sites)) == 1, \
         "Sites should be from a single well/condition"
     well = sites[0][:2]
@@ -187,34 +152,95 @@ def assemble_VAE(paths):
         dat_fs.extend([os.path.join(supp_files_folder, f) \
             for f in os.listdir(supp_files_folder) if f.startswith('stacks')])
 
-    dataset, fs = prepare_dataset_v2(dat_fs, cs=[0, 1])
+    dataset, fs = prepare_dataset_v2(dat_fs, cs=channels)
     assert fs == sorted(fs)
     
     print(f"\tsaving {os.path.join(summary_folder, '%s_file_paths.pkl' % well)}")
     with open(os.path.join(summary_folder, '%s_file_paths.pkl' % well), 'wb') as f:
         pickle.dump(fs, f)
 
-    # print(f"\tsaving {os.input_path.join(summary_folder, '%s_static_patches.pt' % well)}")
-    # torch.save(dataset, os.input_path.join(summary_folder, '%s_static_patches.pt' % well))
-
-    print(f"\tsaving {os.path.join(summary_folder, '%s_static_patches.pkl' % well)}")
-    with open(os.path.join(summary_folder, '%s_static_patches.pkl' % well), 'wb') as f:
-        pickle.dump(dataset, f, protocol=4)
-
-    # Adjust channel mean/std
-    # phase: 0.4980 plus/minus 0.0257
-    # retardance: 0.0285 plus/minus 0.0261, only adjust for mean
-    # phase_slice = dataset.tensors[0][:, 0]
-    # phase_slice = ((phase_slice - phase_slice.mean()) / phase_slice.std()) * 0.0257 + 0.4980
-    # retard_slice = dataset.tensors[0][:, 1]
-    # retard_slice = retard_slice / retard_slice.mean() * 0.0285
-    # adjusted_dataset = TensorDataset(torch.stack([phase_slice, retard_slice], 1))
-    # print(f"\tsaving {os.input_path.join(summary_folder, '%s_adjusted_static_patches.pt' % well)}")
-    # torch.save(adjusted_dataset, os.input_path.join(summary_folder, '%s_adjusted_static_patches.pt' % well))
+    print(f"\tsaving {os.path.join(summary_folder, '%s_static_patches.pt' % well)}")
+    torch.save(dataset, os.path.join(summary_folder, '%s_static_patches.pt' % well))
+    
+    well_supp_files_folder = os.path.join(supp_folder, '%s-supps' % well)
+    relations = process_well_generate_trajectory_relations(fs, sites, well_supp_files_folder)
+    with open(os.path.join(summary_folder, "%s_static_patches_relations.pkl" % well), 'wb') as f:
+        pickle.dump(relations, f)
+    
     return
 
 
-def process_VAE(paths, save_ouput=True):
+def trajectory_matching(summary_folder: str,
+                        supp_folder: str,
+                        channels: list,
+                        model_path: str,
+                        sites: list,
+                        **kwargs):
+    """ Helper function for assembling frame IDs to trajectories
+
+    This function loads saved static frame identifiers ("*_file_paths.pkl") and 
+    cell trajectories ("cell_traj.pkl" in supplementary data folder) and assembles
+    list of frame IDs for each trajectory
+
+    Results will be saved in the summary folder, including:
+        "*_trajectories.pkl": list of frame IDs
+
+    Args:
+        summary_folder (str): folder for raw data, segmentation and 
+            summarized results
+        supp_folder (str): folder for supplementary data
+        channels (list of int): indices of channels used for segmentation 
+            (not used)
+        model_path (str, optional): path to model weight (not used)
+        sites (list of str): list of site names
+
+    """
+    
+    assert len(set(site[:2] for site in sites)) == 1, \
+        "Sites should be from a single well/condition"
+    well = sites[0][:2]
+
+    print(f"\tloading file_paths {os.path.join(summary_folder, '%s_file_paths.pkl' % well)}")
+    fs = pickle.load(open(os.path.join(summary_folder, '%s_file_paths.pkl' % well), 'rb'))
+
+    def patch_name_to_tuple(f):
+        f = [seg for seg in f.split('/') if len(seg) > 0]
+        site_name = f[-2]
+        assert site_name in sites
+        t_point = int(f[-1].split('_')[0])
+        cell_id = int(f[-1].split('_')[1].split('.')[0])
+        return (site_name, t_point, cell_id)
+    patch_id_mapping = {patch_name_to_tuple(f): i for i, f in enumerate(fs)}
+    
+    site_trajs = {}
+    for site in sites:
+        site_supp_files_folder = os.path.join(supp_folder, '%s-supps' % well, '%s' % site)
+        print(f"\tloading cell_traj {os.path.join(site_supp_files_folder, 'cell_traj.pkl')}")
+        trajs = pickle.load(open(os.path.join(site_supp_files_folder, 'cell_traj.pkl'), 'rb'))
+        for i, t in enumerate(trajs[0]):
+            name = site + '/' + str(i)
+            traj = []
+            for t_point in sorted(t.keys()):
+                frame_id = patch_id_mapping[(site, t_point, t[t_point])]
+                if not frame_id is None:
+                    traj.append(frame_id)
+            if len(traj) > 0.95 * len(t):
+                site_trajs[name] = traj
+          
+    with open(os.path.join(summary_folder, '%s_trajectories.pkl' % well), 'wb') as f:
+        print(f"\twriting trajectories {os.path.join(summary_folder, '%s_trajectories.pkl' % well)}")
+        pickle.dump(site_trajs, f)
+    return
+
+
+def process_VAE(summary_folder: str,
+                supp_folder: str,
+                channels: list,
+                model_path: str,
+                sites: list,
+                input_clamp: list = [0., 1.],
+                save_output: bool = True,
+                **kwargs):
     """ Wrapper method for VAE encoding
 
     This function loads prepared dataset and applies trained VAE to encode 
@@ -229,47 +255,38 @@ def process_VAE(paths, save_ouput=True):
         "*_latent_space_after.pkl": array of latent vectors (after quantization)
 
     Args:
-        paths (list): list of paths, containing:
-            0 - folder for raw data, segmentation and summarized results
-            1 - folder for supplementary data
-            2 - path to VQ-VAE model weight
-            3 - list of site names
+        summary_folder (str): folder for raw data, segmentation and 
+            summarized results
+        supp_folder (str): folder for supplementary data
+        channels (list of int): indices of channels used for VAE encoding
+        model_path (str): path to model weight
+        sites (list of str): list of site names
+        input_clamp (list of float or None): if given, the lower/upper limit 
+            of input patches
 
     """
-    #TODO: add pooling datasets features and remove hardcoded normalization constants
-    channel_mean = [0.49998672, 0.007081]
-    channel_std = [0.00074311, 0.00906428]
-    # these sites should be from a single condition (C5, C4, B-wells, etc..)
-    summary_folder, supp_folder, model_dir, sites = paths[0], paths[1], paths[2], paths[3]
-    model_path = os.path.join(model_dir, 'model.pt')
-    model_name = os.path.basename(model_dir)
-    output_dir = os.path.join(summary_folder, model_name)
-    os.makedirs(output_dir, exist_ok=True)
 
     assert len(set(site[:2] for site in sites)) == 1, \
         "Sites should be from a single well/condition"
     well = sites[0][:2]
+    
+    preprocess_setting={
+        0: ("normalize", 0.4, 0.05), # Phase
+        1: ("scale", 0.05), # Retardance
+        2: ("normalize", 0.5, 0.05), # Brightfield
+    }
 
     print(f"\tloading file paths {os.path.join(summary_folder, '%s_file_paths.pkl' % well)}")
     fs = pickle.load(open(os.path.join(summary_folder, '%s_file_paths.pkl' % well), 'rb'))
 
-    # print(f"\tloading static patches {os.supp_dir.join(raw_dir, '%s_adjusted_static_patches.pt' % well)}")
-    # dataset = torch.load(os.supp_dir.join(raw_dir, '%s_adjusted_static_patches.pt' % well))
-    print(f"\tloading static patches {os.path.join(summary_folder, '%s_static_patches.pkl' % well)}")
-    dataset = pickle.load(open(os.path.join(summary_folder, '%s_static_patches.pkl' % well), 'rb'))
-    dataset = zscore(dataset, channel_mean=channel_mean, channel_std=channel_std)
-    dataset = TensorDataset(torch.from_numpy(dataset).float())
-    search_obj = re.search(r'nh(\d+)_nrh(\d+)_ne(\d+).*', model_name)
-    num_hiddens = int(search_obj.group(1))
-    num_residual_hiddens = int(search_obj.group(2))
-    num_embeddings = int(search_obj.group(3))
-    # commitment_cost = float(search_obj.group(4))
-    model = VQ_VAE_z32(num_inputs=2,
-                       num_hiddens=num_hiddens,
-                       num_residual_hiddens=num_residual_hiddens,
-                       num_residual_layers=2,
-                       num_embeddings=num_embeddings,
-                       gpu=True)
+    print(f"\tloading static patches {os.path.join(summary_folder, '%s_static_patches.pt' % well)}")
+    dataset = torch.load(os.path.join(summary_folder, '%s_static_patches.pt' % well))
+    dataset = vae_preprocess(dataset, 
+                             use_channels=channels, 
+                             preprocess_setting=preprocess_setting,
+                             clamp=input_clamp)
+    
+    model = VQ_VAE(alpha=0.0005, gpu=True)
     model = model.cuda()
     try:
         if not model_path is None:
@@ -280,95 +297,84 @@ def process_VAE(paths, save_ouput=True):
         print(ex)
         raise ValueError("Error in loading model weights for VQ-VAE")
 
+    _, n_channels, n_z, x_size, y_size = dataset.tensors[0].shape
     z_bs = {}
     z_as = {}
     for i in range(len(dataset)):
-        sample = dataset[i:(i+1)][0].cuda()
+        sample = dataset[i:(i+1)][0]
+        sample = sample.reshape([-1, n_channels, x_size, y_size]).cuda()
         z_b = model.enc(sample)
         z_a, _, _ = model.vq(z_b)
         f_n = fs[i]
         z_bs[f_n] = z_b.cpu().data.numpy()
-        z_as[f_n] = z_a.cpu().data.numpy()      
+        z_as[f_n] = z_a.cpu().data.numpy()
 
     dats = np.stack([z_bs[f] for f in fs], 0).reshape((len(dataset), -1))
-    print(f"\tsaving {os.path.join(output_dir, '%s_latent_space.pkl' % well)}")
-    with open(os.path.join(output_dir, '%s_latent_space.pkl' % well), 'wb') as f:
-        pickle.dump(dats, f, protocol=4)
+    print(f"\tsaving {os.path.join(summary_folder, '%s_latent_space.pkl' % well)}")
+    with open(os.path.join(summary_folder, '%s_latent_space.pkl' % well), 'wb') as f:
+        pickle.dump(dats, f)
     
     dats = np.stack([z_as[f] for f in fs], 0).reshape((len(dataset), -1))
-    print(f"\tsaving {os.path.join(output_dir, '%s_latent_space_after.pkl' % well)}")
-    with open(os.path.join(output_dir, '%s_latent_space_after.pkl' % well), 'wb') as f:
-        pickle.dump(dats, f, protocol=4)
+    print(f"\tsaving {os.path.join(summary_folder, '%s_latent_space_after.pkl' % well)}")
+    with open(os.path.join(summary_folder, '%s_latent_space_after.pkl' % well), 'wb') as f:
+        pickle.dump(dats, f)
 
-    if save_ouput:
-        np.random.seed(0)
-        random_inds = np.random.randint(0, len(dataset), (10,))
-        for i in random_inds:
-            sample = dataset[i:(i + 1)][0].cuda()
-            output = model(sample)[0]
-            im_phase = im_adjust(sample[0, 0].cpu().data.numpy())
-            im_phase_recon = im_adjust(output[0, 0].cpu().data.numpy())
-            im_retard = im_adjust(sample[0, 1].cpu().data.numpy())
-            im_retard_recon = im_adjust(output[0, 1].cpu().data.numpy())
-            n_rows = 2
-            n_cols = 2
-            fig, ax = plt.subplots(n_rows, n_cols, squeeze=False)
-            ax = ax.flatten()
-            fig.set_size_inches((15, 5 * n_rows))
-            axis_count = 0
-            for im, name in zip([im_phase, im_phase_recon, im_retard, im_retard_recon],
-                                ['phase', 'phase_recon', 'im_retard', 'retard_recon']):
-                ax[axis_count].imshow(np.squeeze(im), cmap='gray')
-                ax[axis_count].axis('off')
-                ax[axis_count].set_title(name, fontsize=12)
-                axis_count += 1
-            fig.savefig(os.path.join(output_dir, 'recon_%d.jpg' % i),
-                        dpi=300, bbox_inches='tight')
-            plt.close(fig)
+    return
 
 
-def trajectory_matching(paths):
-    """ Helper function for assembling frame IDs to trajectories
+# def process_PCA(summary_folder: str,
+#                 supp_folder: str,
+#                 channels: list,
+#                 model_path: str,
+#                 sites: list,
+#                 **kwargs):
+#     """ Wrapper method for PCA dimension reduction
 
-    This function loads saved static frame identifiers ("*_file_paths.pkl") and 
-    cell trajectories ("cell_traj.pkl" in supplementary data folder) and assembles
-    list of frame IDs for each trajectory
+#     This function loads latent vectors generated by VQ-VAE and applies trained
+#     PCA to extract top PCs as morphology descriptors.
 
-    Results will be saved in the summary folder, including:
-        "*_trajectories.pkl": list of frame IDs
+#     PCA weight path should be provided, if not a default path will be used:
+#         pca: 'HiddenStateExtractor/pca_save.pkl'
 
-    Args:
-        paths (list): list of paths, containing:
-            0 - folder for raw data, segmentation and summarized results
-            1 - folder for supplementary data
-            2 - path to model weight (not used in this method)
-            3 - list of site names
+#     Resulting morphology descriptors will be saved in the summary folder, 
+#     including:
+#         "*_latent_space_PCAed.pkl": array of top PCs of latent vectors (before 
+#             quantization)
+#         "*_latent_space_after_PCAed.pkl": array of top PCs of latent vectors 
+#             (after quantization)
 
-    """
+#     Args:
+#         paths (list): list of paths, containing:
+#             0 - folder for raw data, segmentation and summarized results
+#             1 - folder for supplementary data
+#             2 - path to PCA weight
+#             3 - list of site names
 
-    summary_folder, supp_folder, model_path, sites = paths[0], paths[1], paths[2], paths[3]
-    assert len(set(site[:2] for site in sites)) == 1, \
-        "Sites should be from a single well/condition"
-    well = sites[0][:2]
+#     """
+#     # these sites should be from a single condition (C5, C4, B-wells, etc..)
+#     summary_folder, supp_folder, model_path, sites = paths[0], paths[1], paths[2], paths[3]
+#     assert len(set(site[:2] for site in sites)) == 1, \
+#         "Sites should be from a single well/condition"
+#     well = sites[0][:2]
 
-    print(f"\tloading file_paths {os.path.join(summary_folder, '%s_file_paths.pkl' % well)}")
-    fs = pickle.load(open(os.path.join(summary_folder, '%s_file_paths.pkl' % well), 'rb'))
+#     try:
+#         if not model_path is None:
+#             pca = pickle.load(open(model_path, 'rb'))
+#         else:
+#             pca = pickle.load(open('HiddenStateExtractor/pca_save.pkl', 'rb'))
+#     except Exception as ex:
+#         print(ex)
+#         raise ValueError("Error in loading pre-saved PCA weights")
 
-    site_trajs = {}
-    for site in sites:
-        site_supp_files_folder = os.path.join(supp_folder, '%s-supps' % well, '%s' % site)
-        print(f"\tloading cell_traj {os.path.join(site_supp_files_folder, 'cell_traj.pkl')}")
-        trajs = pickle.load(open(os.path.join(site_supp_files_folder, 'cell_traj.pkl'), 'rb'))
-        for i, t in enumerate(trajs[0]):
-            name = site + '/' + str(i)
-            traj = []
-            for t_point in sorted(t.keys()):
-                frame_name = os.path.join(site_supp_files_folder, '%d_%d.h5' % (t_point, t[t_point]))
-                if frame_name in fs:
-                    traj.append(fs.index(frame_name))
-            if len(traj) > 0.95 * len(t):
-                site_trajs[name] = traj
-          
-    with open(os.path.join(summary_folder, '%s_trajectories.pkl' % well), 'wb') as f:
-        print(f"\twriting trajectories {os.path.join(summary_folder, '%s_trajectories.pkl' % well)}")
-        pickle.dump(site_trajs, f)
+#     dats = pickle.load(open(os.path.join(summary_folder, '%s_latent_space.pkl' % well), 'rb'))
+#     dats_ = pca.transform(dats)
+#     print(f"\tsaving {os.path.join(summary_folder, '%s_latent_space_PCAed.pkl' % well)}")
+#     with open(os.path.join(summary_folder, '%s_latent_space_PCAed.pkl' % well), 'wb') as f:
+#         pickle.dump(dats_, f)
+
+#     dats = pickle.load(open(os.path.join(summary_folder, '%s_latent_space_after.pkl' % well), 'rb'))
+#     dats_ = pca.transform(dats)
+#     print(f"\tsaving {os.path.join(summary_folder, '%s_latent_space_after_PCAed.pkl' % well)}")
+#     with open(os.path.join(summary_folder, '%s_latent_space_after_PCAed.pkl' % well), 'wb') as f:
+#         pickle.dump(dats_, f)
+#     return
