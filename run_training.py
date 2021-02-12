@@ -1378,21 +1378,21 @@ def concat_relations(relations, offsets):
 
 
 def _run_train(config_):
-    c = YamlReader()
-    c.read_config(config_)
+    config = YamlReader()
+    config.read_config(config_)
 
     # Settings
-    gpu = bool(distutils.util.strtobool(c.GPU))
-    gpuid = c.GPU_ID
-    w_a = c.w_a
-    w_t = c.w_t
+    gpu = bool(distutils.util.strtobool(config.training.GPU))
+    gpuid = config.training.GPU_ID
+    w_a = config.preprocess.w_a
+    w_t = config.preprocess.w_t
 
     # estimate mean and std from the data
-    channel_mean = c.channel_mean
-    channel_std = c.channel_std
+    channel_mean = config.preproess.channel_mean
+    channel_std = config.preprocess.channel_std
 
-    train_dirs = c.train_dirs
-    raw_dirs = c.raw_dirs
+    train_dirs = config.files.train_dirs
+    raw_dirs = config.files.raw_dirs
     for train_dir in train_dirs:
         os.makedirs(train_dir, exist_ok=True)
 
@@ -1437,22 +1437,22 @@ def _run_train(config_):
     dataset, relation_mat, inds_in_order = reorder_with_trajectories(dataset, relations, seed=123, w_a=w_a, w_t=w_t)
 
     # Initialize Model
-    num_hiddens = c.num_hiddens
-    num_residual_hiddens = c.num_residual_hiddens
-    num_embeddings = c.num_embeddings
-    commitment_cost = c.commitment_cost
-    alpha = c.alpha
+    num_hiddens = config.training.num_hiddens
+    num_residual_hiddens = config.training.num_residual_hiddens
+    num_embeddings = config.training.num_embeddings
+    commitment_cost = config.training.commitment_cost
+    alpha = config.training.alpha
 
-    if c.model == 'VQ_VAE_z32':
-        model = VQ_VAE_z32(num_inputs=c.num_inputs,
+    if config.training.model == 'VQ_VAE_z32':
+        model = VQ_VAE_z32(num_inputs=config.training.num_inputs,
                            num_hiddens=num_hiddens,
                            num_residual_hiddens=num_residual_hiddens,
-                           num_residual_layers=c.num_residual_layers,
+                           num_residual_layers=config.training.num_residual_layers,
                            num_embeddings=num_embeddings,
                            commitment_cost=commitment_cost,
                            alpha=alpha)
     else:
-        raise AttributeError(f"no model named {c.model} is defined")
+        raise AttributeError(f"no model named {config.training.model} is defined")
 
     # TODO: Torchvision data augmentation does not work for Pytorch tensordataset. Rewrite with dataloader
     #
@@ -1479,9 +1479,9 @@ def _run_train(config_):
                   output_dir=model_dir,
                   relation_mat=relation_mat,
                   mask=None,
-                  n_epochs=c.epochs,
-                  lr=c.learning_rate,
-                  batch_size=c.batch_size,
+                  n_epochs=config.training.epochs,
+                  lr=config.training.learning_rate,
+                  batch_size=config.training.batch_size,
                   gpu=gpu,
                   transform=True,
                   )
