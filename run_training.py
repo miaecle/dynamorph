@@ -1391,8 +1391,9 @@ def _run_train(config_):
     channel_mean = config.preproess.channel_mean
     channel_std = config.preprocess.channel_std
 
-    train_dirs = config.files.train_dirs
     raw_dirs = config.files.raw_dirs
+    train_dirs = config.files.train_dirs
+    weights_dir = config.files.weights_dir
     for train_dir in train_dirs:
         os.makedirs(train_dir, exist_ok=True)
 
@@ -1465,7 +1466,7 @@ def _run_train(config_):
     # ])
 
     # Train model
-    model_dir = os.path.join(train_dir, 'mock+low_moi_z32_nh{}_nrh{}_ne{}_alpha{}_wa{}_wt{}_aug'.format(
+    model_dir = os.path.join(weights_dir, 'mock+low_moi_z32_nh{}_nrh{}_ne{}_alpha{}_wa{}_wt{}_aug'.format(
         num_hiddens, num_residual_hiddens, num_embeddings, alpha, w_a, w_t))
     if gpu:
         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"

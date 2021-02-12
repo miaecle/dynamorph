@@ -14,7 +14,6 @@ FILES = {
     'supp_dirs',
     'train_dirs',
     'val_dirs',
-    'model_dir',
     'weights_dir'
 }
 

@@ -263,10 +263,10 @@ def import_object(module_name, obj_name, obj_type='class'):
     except ImportError:
         raise
 
-def process_VAE(summary_folder: str,
+def process_VAE(raw_folder: str,
                 supp_folder: str,
                 channels: list,
-                model_dir: str,
+                weights_dir: str,
                 sites: list,
                 network: str= 'VQ_VAE_z16',
                 input_clamp: list = [0., 1.],
@@ -302,9 +302,9 @@ def process_VAE(summary_folder: str,
     # depending on if the inference data has the same distribution as training data
 
     # these sites should be from a single condition (C5, C4, B-wells, etc..)
-    model_path = os.path.join(model_dir, 'model.pt')
-    model_name = os.path.basename(model_dir)
-    output_dir = os.path.join(summary_folder, model_name)
+    model_path = os.path.join(weights_dir, 'model.pt')
+    model_name = os.path.basename(weights_dir)
+    output_dir = os.path.join(raw_folder, model_name)
     os.makedirs(output_dir, exist_ok=True)
 
     assert len(set(site[:2] for site in sites)) == 1, \
@@ -323,8 +323,8 @@ def process_VAE(summary_folder: str,
     channel_mean = None
     channel_std = None
 
-    print(f"\tloading file paths {os.path.join(summary_folder, '%s_file_paths.pkl' % well)}")
-    fs = pickle.load(open(os.path.join(summary_folder, '%s_file_paths.pkl' % well), 'rb'))
+    print(f"\tloading file paths {os.path.join(raw_folder, '%s_file_paths.pkl' % well)}")
+    fs = pickle.load(open(os.path.join(raw_folder, '%s_file_paths.pkl' % well), 'rb'))
 
     # dataset = torch.load(os.path.join(summary_folder, '%s_static_patches.pt' % well))
     # dataset = vae_preprocess(dataset,
@@ -332,8 +332,8 @@ def process_VAE(summary_folder: str,
     #                          preprocess_setting=preprocess_setting,
     #                          clamp=input_clamp)
     #
-    print(f"\tloading static patches {os.path.join(summary_folder, '%s_static_patches.pkl' % well)}")
-    dataset = pickle.load(open(os.path.join(summary_folder, '%s_static_patches.pkl' % well), 'rb'))
+    print(f"\tloading static patches {os.path.join(raw_folder, '%s_static_patches.pkl' % well)}")
+    dataset = pickle.load(open(os.path.join(raw_folder, '%s_static_patches.pkl' % well), 'rb'))
     dataset = zscore(dataset, channel_mean=channel_mean, channel_std=channel_std)
     dataset = TensorDataset(torch.from_numpy(dataset).float())
     search_obj = re.search(r'nh(\d+)_nrh(\d+)_ne(\d+).*', model_name)
