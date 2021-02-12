@@ -396,13 +396,12 @@ def process_site_build_trajectory(site_supp_files_folder, **kwargs):
     assert np.allclose(np.array(t_points)[1:] - 1, np.array(t_points)[:-1])
 
     # Mapping to centroid positions
-    cell_positions_dict = {k: dict(cell_positions[k][0] + cell_positions[k][1] + cell_positions[k][2]) for k in cell_positions}
+    cell_positions_dict = {k: dict(cell_positions[k]) for k in cell_positions}
     # Mapping to size of segmentation
     cell_size_dict = {}
     for t_point in t_points:
         positions, positions_labels = cell_pixel_assignments[t_point]
-        mg_cells, non_mg_cells, other_cells = cell_positions[t_point]
-        all_cells = mg_cells + non_mg_cells + other_cells
+        all_cells = cell_positions[t_point]
         cell_size_d = dict(zip(*np.unique(positions_labels, return_counts=True)))
         cell_size_d = {id: cell_size_d[id] for id, position in all_cells}
         cell_size_dict[t_point] = cell_size_d
@@ -432,20 +431,20 @@ def process_site_build_trajectory(site_supp_files_folder, **kwargs):
     except Exception as e:
         cell_trajectories = cell_trajectories_positions = []
         warnings.warn('No trajectory is generated due to the following error: {}'.format(e))
-      
+
     with open(os.path.join(site_supp_files_folder, 'cell_traj.pkl'), 'wb') as f:
         print(f"\tsaving cell_traj {os.path.join(site_supp_files_folder, 'cell_traj.pkl')}")
         pickle.dump([cell_trajectories, cell_trajectories_positions], f)
     return
 
 
-def process_well_generate_trajectory_relations(fs, 
-                                               sites, 
+def process_well_generate_trajectory_relations(fs,
+                                               sites,
                                                well_supp_files_folder,
                                                **kwargs):
     """ Find pair relations (adjacent frame, same trajectory) in static patches
     Results will be saved under `raw_folder`
-    
+
     Args:
         fs (list of str): all individual cell patch names
         sites (list of str): sites (from the same well)
@@ -466,8 +465,8 @@ def process_well_generate_trajectory_relations(fs,
 
     for site in sites:
         print('site:', site)
-        trajectories = pickle.load(open(os.path.join(well_supp_files_folder, 
-                                                     site, 
+        trajectories = pickle.load(open(os.path.join(well_supp_files_folder,
+                                                     site,
                                                      "cell_traj.pkl"), 'rb'))[0]
         for trajectory in trajectories:
             t_ids = sorted(trajectory.keys())
@@ -484,7 +483,7 @@ def process_well_generate_trajectory_relations(fs,
                 if t_idx + 1 in t_ids:
                     adj_patch_id = patch_id_mapping[(site, t_idx + 1, trajectory[t_idx + 1])]
                     relations[(ref_patch_id, adj_patch_id)] = 2
-    
+
             # Same trajectory
             for i in patch_ids:
                 for j in patch_ids:

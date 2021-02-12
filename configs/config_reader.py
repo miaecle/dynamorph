@@ -18,12 +18,14 @@ class YamlReader:
         'model_dir'
     }
 
-    trajectory_relations = {
+    preprocess = {
         'cs',
         'cs_mask',
         'input_shape',
         'w_a',
-        'w_t'
+        'w_t',
+        'channel_mean',
+        'channel_std'
     }
 
     model = {
@@ -61,7 +63,7 @@ class YamlReader:
             self._parse_training()
 
     def _check_overlapping_attr(self):
-        if len(self.files & self.trajectory_relations & self.model & self.training) != 0:
+        if len(self.files & self.preprocess & self.model & self.training) != 0:
             raise AttributeError("repeated names for pre-defined configuration attributes,"
                                  "all attributes must be unique names")
 

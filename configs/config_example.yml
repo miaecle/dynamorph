@@ -13,11 +13,13 @@ files:
 
 
 trajectory_relations:
-  cs: [0, 1]
-  cs_mask: [2,3]
-  input_shape: (128, 128)
+#  cs: [0, 1]
+#  cs_mask: [2,3]
+#  input_shape: (128, 128)
   w_a: 1
   w_t: 0.5
+  channel_mean: [0.4, 0, 0.5]
+  channel_std: [0.05, 0.05, 0.05]
 
 
 model:
