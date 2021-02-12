@@ -25,7 +25,11 @@ preprocess:
 
 
 inference:
-  model:
+  model: 'VQ_VAE_z16'
+  weights: '/gpfs/CompMicro/projects/dynamorph/CellVAE/save_0005_bkp4.pt'
+  gpus: 1
+  fov: ['C5-Site_0','C5-Site_1']
+  channels: [0,1,2]
 
 
 training:
