@@ -18,7 +18,9 @@ from run_training import VQ_VAE_z32, zscore
 from HiddenStateExtractor.vq_vae import VQ_VAE
 from HiddenStateExtractor.vq_vae_supp import prepare_dataset_v2, vae_preprocess
 
+# path to location of model definitions
 NETWORK_MODULE = 'run_training'
+
 
 def extract_patches(summary_folder: str,
                     supp_folder: str,

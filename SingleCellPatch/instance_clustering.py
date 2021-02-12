@@ -136,8 +136,8 @@ def instance_clustering(cell_segmentation,
     return cell_positions, positions, positions_labels
 
 
-def process_site_instance_segmentation(site_path, 
-                                       site_segmentation_path, 
+def process_site_instance_segmentation(raw_data,
+                                       raw_data_segmented,
                                        site_supp_files_folder,
                                        **kwargs):
     """ Wrapper method for instance segmentation
@@ -157,9 +157,9 @@ def process_site_instance_segmentation(site_path,
 
     # TODO: Size is hardcoded here
     # Should be of size (n_frame, n_channels, z(1), x(2048), y(2048)), uint16
-    image_stack = np.load(site_path)
+    image_stack = np.load(raw_data)
     # Should be of size (n_frame, n_classes, z(1), x(2048), y(2048)), float
-    segmentation_stack = np.load(site_segmentation_path)
+    segmentation_stack = np.load(raw_data_segmented)
 
     cell_positions = {}
     cell_pixel_assignments = {}

@@ -13,6 +13,7 @@ FILES = {
     'raw_dirs',
     'supp_dirs',
     'train_dirs',
+    'val_dirs',
     'model_dir',
     'weights_dir'
 }
@@ -28,7 +29,17 @@ PREPROCESS = {
 }
 
 INFERENCE = {
-    'model'
+    'model',
+    'weights',
+    'gpus',
+    'gpu_id',
+    'fov',
+    'channels',
+    'num_classes',
+    'window_size',
+    'batch_size',
+    'num_pred_rnd',
+    'seg_val_cat'
 }
 
 TRAINING = {
