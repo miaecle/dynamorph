@@ -17,6 +17,8 @@ def main(arguments_):
 
     path = arguments_.input
     outputs = arguments_.output
+    chans = arguments_.channels
+    multi = arguments_.multipage
 
     if arguments_.fov:
         sites = arguments_.fov
@@ -32,7 +34,7 @@ def main(arguments_):
 
         try:
             print(f"writing {site} to {out}", flush=True)
-            write_raw_to_npy(path, site, out, multipage=True)
+            write_raw_to_npy(path, site, out, chans, multipage=multi)
         except Exception as e:
             print(f"\terror in writing {site}", flush=True)
 
@@ -49,7 +51,7 @@ def parse_args():
         '-i', '--input',
         type=str,
         required=True,
-        help="Path to multipage-tiff file of format [t, x, y]",
+        help="Path to multipage-tiff file of format [t, x, y], or to single-page-tiffs",
     )
     parser.add_argument(
         '-o', '--output',
@@ -63,6 +65,22 @@ def parse_args():
         type=lambda s: [str(item.strip(' ').strip("'")) for item in s.split(',')],
         required=False,
         help="list of field-of-views to process (subfolders in raw data directory)",
+    )
+    # sites argument is a list of strings
+    parser.add_argument(
+        '-c', '--channels',
+        type=lambda s: [str(item.strip(' ').strip("'")) for item in s.split(',')],
+        required=False,
+        default=["Retardance", "Phase2D", "Brightfield"],
+        help="list of channels to process (subfolders in raw data directory)"
+    )
+    # sites argument is a list of strings
+    parser.add_argument(
+        '-m', '--multipage',
+        type=bool,
+        required=False,
+        default=False,
+        help="list of channels to process (subfolders in raw data directory)"
     )
     return parser.parse_args()
 
