@@ -66,8 +66,8 @@ TRAINING = {
     'epochs',
     'learning_rate',
     'batch_size',
-    'GPU',
-    'GPU_ID',
+    'gpus',
+    'gpu_id',
     'shuffle_data',
     'transform',
 }
@@ -101,34 +101,34 @@ class YamlReader:
     def _parse_files(self):
         for key, value in self.config['files'].items():
             if key in FILES:
-                self.files.key = value
+                setattr(self.files, key, value)
             else:
                 log_warning(f"yaml FILE config field {key} is not recognized")
 
     def _parse_preprocessing(self):
         for key, value in self.config['preprocess'].items():
             if key in PREPROCESS:
-                self.preprocess.key = value
+                setattr(self.preprocess, key, value)
             else:
                 log_warning(f"yaml PREPROCESS config field {key} is not recognized")
 
     def _parse_patch(self):
         for key, value in self.config['patch'].items():
             if key in PATCH:
-                self.patch.key = value
+                setattr(self.patch, key, value)
             else:
                 log_warning(f"yaml PATCH config field {key} is not recognized")
 
     def _parse_inference(self):
         for key, value in self.config['inference'].items():
             if key in INFERENCE:
-                self.inference.key = value
+                setattr(self.inference, key, value)
             else:
                 log_warning(f"yaml INFERENCE config field {key} is not recognized")
 
     def _parse_training(self):
         for key, value in self.config['training'].items():
             if key in TRAINING:
-                self.training.key = value
+                setattr(self.training, key, value)
             else:
                 log_warning(f"yaml TRAINING config field {key} is not recognized")

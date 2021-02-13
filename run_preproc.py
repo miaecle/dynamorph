@@ -61,7 +61,7 @@ def parse_args():
         help="Path to write results",
     )
     parser.add_argument(
-        '--config',
+        '-c', '--config',
         type=str,
         required=True,
         help='path to yaml configuration file'

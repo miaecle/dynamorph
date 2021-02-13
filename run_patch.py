@@ -95,7 +95,7 @@ def parse_args():
         help="Method: one of 'extract_patches', 'build_trajectories'",
     )
     parser.add_argument(
-        '--config',
+        '-c', '--config',
         type=str,
         required=True,
         help='path to yaml configuration file'

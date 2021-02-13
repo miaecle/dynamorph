@@ -9,7 +9,7 @@ files:
   train_dirs: ['/CompMicro/projects/cardiomyocytes/200721_CM_Mock_SPS_Fluor/20200721_CM_Mock_SPS/dnm_train_tstack',
                '/CompMicro/projects/cardiomyocytes/20200722CM_LowMOI_SPS_Fluor/20200722 CM_LowMOI_SPS/dnm_train_tstack']
 
-  validation_dirs: ['/CompMicro/projects/cardiomyocytes/200721_CM_Mock_SPS_Fluor/20200721_CM_Mock_SPS/dnm_train_tstack/val',
+  val_dirs: ['/CompMicro/projects/cardiomyocytes/200721_CM_Mock_SPS_Fluor/20200721_CM_Mock_SPS/dnm_train_tstack/val',
                     '/CompMicro/projects/cardiomyocytes/20200722CM_LowMOI_SPS_Fluor/20200722 CM_LowMOI_SPS/dnm_train_tstack/val']
 
   weights_dir: '/CompMicro/projects/cardiomyocytes/200721_CM_Mock_SPS_Fluor/20200721_CM_Mock_SPS/dnm_train_tstack/weights'
@@ -35,8 +35,8 @@ inference:
   model: 'VQ_VAE_z16'
   # VQ_VAE_z16 or UNet
   weights: '/gpfs/CompMicro/projects/dynamorph/CellVAE/save_0005_bkp4.pt'
-  GPU: 1
-  GPU_ID: 3
+  gpus: 1
+  gpu_id: 3
   fov: ['C5-Site_0','C5-Site_1']
   channels: [0,1,2]
   num_classes: 3
@@ -68,8 +68,8 @@ training:
   epochs: 5000
   learning_rate: 0.0001
   batch_size: 96
-  GPU: True
-  GPU_ID: 3
+  gpus: True
+  gpu_id: 3
   shuffle_data: False
   transform: True
 

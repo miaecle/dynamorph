@@ -1539,7 +1539,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        '--config',
+        '-c', '--config',
         type=str,
         required=True,
         help='path to yaml configuration file'
