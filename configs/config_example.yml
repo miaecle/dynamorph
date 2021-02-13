@@ -14,24 +14,27 @@ files:
 
   weights_dir: '/CompMicro/projects/cardiomyocytes/200721_CM_Mock_SPS_Fluor/20200721_CM_Mock_SPS/dnm_train_tstack/weights'
 
-
 preprocess:
-#  cs: [0, 1]
-#  cs_mask: [2,3]
-#  input_shape: (128, 128)
   w_a: 1
   w_t: 0.5
   channel_mean: [0.4, 0, 0.5]
   channel_std: [0.05, 0.05, 0.05]
 
+  channels:
+  gpus:
+  fov:
+  window_size: 256
+  save_fig: False
+  reload: True
+  skip_boundary: False
+
 
 inference:
   model: 'VQ_VAE_z16'
   # VQ_VAE_z16 or UNet
-
   weights: '/gpfs/CompMicro/projects/dynamorph/CellVAE/save_0005_bkp4.pt'
   GPU: 1
-  GPU_ID:
+  GPU_ID: 3
   fov: ['C5-Site_0','C5-Site_1']
   channels: [0,1,2]
   num_classes: 3
