@@ -54,10 +54,10 @@ def extract_patches(raw_folder: str,
 
     """
 
-    window_size = config.preprocess.window_size
-    save_fig = config.preprocess.save_fig
-    reload = config.preprocess.reload
-    skip_boundary = config.preprocess.skip_boundary
+    window_size = config.patch.window_size
+    save_fig = config.patch.save_fig
+    reload = config.patch.reload
+    skip_boundary = config.patch.skip_boundary
 
     for site in sites:
         site_path = os.path.join(raw_folder + '/' + site + '.npy')

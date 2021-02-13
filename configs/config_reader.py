@@ -9,6 +9,7 @@ def log_warning(msg, *args, **kwargs):
     logging.getLogger(__name__).warning(msg, *args, **kwargs)
 
 
+# to add a new configuration parameter, simply add the string to the appropriate set here
 FILES = {
     'raw_dirs',
     'supp_dirs',
@@ -18,13 +19,19 @@ FILES = {
 }
 
 PREPROCESS = {
-    'cs',
-    'cs_mask',
-    'input_shape',
-    'w_a',
-    'w_t',
-    'channel_mean',
-    'channel_std'
+    'channels',
+    'fov',
+    'multipage'
+}
+
+PATCH = {
+    'channels',
+    'fov',
+    'gpus',
+    'window_size',
+    'save_fig',
+    'reload',
+    'skip_boundary'
 }
 
 INFERENCE = {
@@ -48,6 +55,12 @@ TRAINING = {
     'num_residual_hiddens',
     'num_residual_layers',
     'num_embeddings',
+
+    'w_a',
+    'w_t',
+    'channel_mean',
+    'channel_std',
+
     'commitment_cost',
     'alpha',
     'epochs',
@@ -68,6 +81,7 @@ class YamlReader:
 
     files = Object()
     preprocess = Object()
+    patch = Object()
     inference = Object()
     training = Object()
 
@@ -80,6 +94,7 @@ class YamlReader:
 
             self._parse_files()
             self._parse_preprocessing()
+            self._parse_patch()
             self._parse_inference()
             self._parse_training()
 
@@ -96,6 +111,13 @@ class YamlReader:
                 self.preprocess.key = value
             else:
                 log_warning(f"yaml PREPROCESS config field {key} is not recognized")
+
+    def _parse_patch(self):
+        for key, value in self.config['patch'].items():
+            if key in PATCH:
+                self.patch.key = value
+            else:
+                log_warning(f"yaml PATCH config field {key} is not recognized")
 
     def _parse_inference(self):
         for key, value in self.config['inference'].items():

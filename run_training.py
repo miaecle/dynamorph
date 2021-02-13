@@ -1384,12 +1384,12 @@ def _run_train(config_):
     # Settings
     gpu = bool(distutils.util.strtobool(config.training.GPU))
     gpuid = config.training.GPU_ID
-    w_a = config.preprocess.w_a
-    w_t = config.preprocess.w_t
+    w_a = config.training.w_a
+    w_t = config.training.w_t
 
     # estimate mean and std from the data
-    channel_mean = config.preproess.channel_mean
-    channel_std = config.preprocess.channel_std
+    channel_mean = config.training.channel_mean
+    channel_std = config.training.channel_std
 
     raw_dirs = config.files.raw_dirs
     train_dirs = config.files.train_dirs

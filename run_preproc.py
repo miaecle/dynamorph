@@ -11,17 +11,18 @@ import os
 import time
 
 import argparse
+from configs.config_reader import YamlReader
 
 
-def main(arguments_):
+def main(input_, output_, config_):
 
-    path = arguments_.input
-    outputs = arguments_.output
-    chans = arguments_.channels
-    multi = arguments_.multipage
+    path = input_
+    outputs = output_
+    chans = config_.preprocess.channels
+    multi = config_.preprocess.multipage
 
-    if arguments_.fov:
-        sites = arguments_.fov
+    if config_.preprocess.fov:
+        sites = config_.preprocess.fov
     else:
         # assume all subdirectories are site/FOVs
         sites = [site for site in os.listdir(path) if os.path.isdir(os.path.join(path, site))]
@@ -59,35 +60,23 @@ def parse_args():
         required=True,
         help="Path to write results",
     )
-    # sites argument is a list of strings
     parser.add_argument(
-        '-f', '--fov',
-        type=lambda s: [str(item.strip(' ').strip("'")) for item in s.split(',')],
-        required=False,
-        help="list of field-of-views to process (subfolders in raw data directory)",
+        '--config',
+        type=str,
+        required=True,
+        help='path to yaml configuration file'
     )
-    # sites argument is a list of strings
-    parser.add_argument(
-        '-c', '--channels',
-        type=lambda s: [str(item.strip(' ').strip("'")) for item in s.split(',')],
-        required=False,
-        default=["Retardance", "Phase2D", "Brightfield"],
-        help="list of channels to process (subfolders in raw data directory)"
-    )
-    # sites argument is a list of strings
-    parser.add_argument(
-        '-m', '--multipage',
-        type=bool,
-        required=False,
-        default=False,
-        help="list of channels to process (subfolders in raw data directory)"
-    )
+
     return parser.parse_args()
 
 
 if __name__ == '__main__':
-    print(time.asctime(time.localtime(time.time())), flush=True)
+    # print(time.asctime(time.localtime(time.time())), flush=True)
     arguments = parse_args()
-    main(arguments)
-    print(time.asctime(time.localtime(time.time())), flush=True)
+    config = YamlReader()
+    config.read_config(arguments.config)
+
+    main(arguments.input, arguments.output, config)
+
+    # print(time.asctime(time.localtime(time.time())), flush=True)
 

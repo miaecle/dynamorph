@@ -31,12 +31,12 @@ def main(method_, raw_dir_, supp_dir_, config_):
     raw = raw_dir_
     supp = supp_dir_
     method = method_
-    fov = config.preprocess.fov
+    fov = config.patch.fov
 
-    channels = config.preprocess.channels
+    channels = config.patch.channels
     assert len(channels) > 0, "At least one channel must be specified"
 
-    n_gpu = config.preprocess.gpus
+    n_gpu = config.patch.gpus
 
     # extract patches needs raw (NN probs, stack), supp (cell_positions, cell_pixel_assignments)
     if method == 'extract_patches':
