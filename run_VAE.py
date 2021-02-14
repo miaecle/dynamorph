@@ -47,8 +47,8 @@ def main(method_, raw_dir_, supp_dir_, config_):
     elif method == 'process':
         if not inputs:
             raise AttributeError("raw directory must be specified when method = process")
-        if type(weights) is not list:
-            weights = [weights]
+        # if type(weights) is not list:
+        #     weights = [weights]
         if not weights:
             raise AttributeError("pytorch VQ-VAE weights path must be specified when method = process")
 
@@ -73,13 +73,14 @@ def main(method_, raw_dir_, supp_dir_, config_):
     os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
     print("CUDA_VISIBLE_DEVICES=" + os.environ["CUDA_VISIBLE_DEVICES"])
     for i, well in enumerate(wells):
-        for weight in weights:
-            print('Encoding using model {}'.format(weight))
-            well_sites = [s for s in sites if s[:2] == well]
-            args = (inputs, outputs, channels, weight, well_sites, network)
-            p = Worker(args, gpuid=gpu_id, method=method)
-            p.start()
-            p.join()
+        # don't batch weights here
+        # for weight in weights:
+        # print('Encoding using model {}'.format(weight))
+        well_sites = [s for s in sites if s[:2] == well]
+        args = (inputs, outputs, channels, weights, well_sites, network)
+        p = Worker(args, gpuid=gpu_id, method=method)
+        p.start()
+        p.join()
 
 
 def parse_args():
