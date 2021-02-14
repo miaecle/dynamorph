@@ -124,6 +124,7 @@ def assemble_VAE(summary_folder: str,
                  channels: list,
                  model_path: str,
                  sites: list,
+                 network: str = None,
                  **kwargs):
     """ Wrapper method for prepare dataset for VAE encoding
 
