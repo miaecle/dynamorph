@@ -13,6 +13,7 @@ files:
                     '/CompMicro/projects/cardiomyocytes/20200722CM_LowMOI_SPS_Fluor/20200722 CM_LowMOI_SPS/dnm_train_tstack/val']
 
   weights_dir: '/CompMicro/projects/cardiomyocytes/200721_CM_Mock_SPS_Fluor/20200721_CM_Mock_SPS/dnm_train_tstack/weights'
+  # path to save weights during training, subdirectory of train_dirs
 
 
 preprocess:
@@ -34,7 +35,13 @@ patch:
 inference:
   model: 'VQ_VAE_z16'
   # VQ_VAE_z16 or UNet
+
   weights: '/gpfs/CompMicro/projects/dynamorph/CellVAE/save_0005_bkp4.pt'
+  # pytorch weight file
+
+  save_output: True
+  # write .jpg results from run_vae.process
+
   gpus: 1
   gpu_id: 3
   fov: ['C5-Site_0','C5-Site_1']

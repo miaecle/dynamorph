@@ -37,6 +37,7 @@ PATCH = {
 INFERENCE = {
     'model',
     'weights',
+    'save_output',
     'gpus',
     'gpu_id',
     'fov',
@@ -77,16 +78,17 @@ class Object:
     pass
 
 
-class YamlReader:
-
-    files = Object()
-    preprocess = Object()
-    patch = Object()
-    inference = Object()
-    training = Object()
+class YamlReader(Object):
 
     def __init__(self):
         self.config = None
+
+        # easy way to assign attributes to each category
+        self.files = Object()
+        self.preprocess = Object()
+        self.patch = Object()
+        self.inference = Object()
+        self.training = Object()
 
     def read_config(self, yml_config):
         with open(yml_config, 'r') as f:
@@ -132,3 +134,7 @@ class YamlReader:
                 setattr(self.training, key, value)
             else:
                 log_warning(f"yaml TRAINING config field {key} is not recognized")
+
+
+
+

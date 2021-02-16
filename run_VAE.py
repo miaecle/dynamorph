@@ -1,8 +1,9 @@
 from pipeline.patch_VAE import assemble_VAE, process_VAE, trajectory_matching
-from torch.multiprocessing import Pool, Queue, Process
+# from torch.multiprocessing import Pool, Queue, Process
 import torch.multiprocessing as mp
-import os
+import os, sys
 import argparse
+from multiprocessing import Process
 
 from configs.config_reader import YamlReader
 
@@ -18,7 +19,7 @@ class Worker(Process):
         if self.method == 'assemble':
             assemble_VAE(*self.inputs)
         elif self.method == 'process':
-            process_VAE(*self.inputs, save_ouput=True)
+            process_VAE(*self.inputs)
         elif self.method == 'trajectory_matching':
             trajectory_matching(*self.inputs)
 
@@ -28,12 +29,12 @@ def main(method_, raw_dir_, supp_dir_, config_):
 
     inputs = raw_dir_
     outputs = supp_dir_
-    weights = config.inference.weights
-    channels = config_.inference.channels
-    network = config_.inference.model
-    gpu_id = config.inference.gpu_id
+    weights = config_.inference.weights
+    # channels = config_.inference.channels
+    # network = config_.inference.model
+    gpu_id = config_.inference.gpu_id
 
-    assert len(channels) > 0, "At least one channel must be specified"
+    # assert len(channels) > 0, "At least one channel must be specified"
 
     # todo file path checks can be done earlier
     # assemble needs raw (write file_paths/static_patches/adjusted_patches), and supp (read site-supps)
@@ -59,8 +60,8 @@ def main(method_, raw_dir_, supp_dir_, config_):
         if not outputs:
             raise AttributeError("supplementary directory must be specified when method = trajectory_matching")
 
-    if config.inference.fov:
-        sites = config.inference.fov
+    if config_.inference.fov:
+        sites = config_.inference.fov
     else:
         # get all "XX-SITE_#" identifiers in raw data directory
         img_names = [file for file in os.listdir(inputs) if (file.endswith(".npy")) & ('_NN' not in file)]
@@ -77,7 +78,8 @@ def main(method_, raw_dir_, supp_dir_, config_):
         # for weight in weights:
         # print('Encoding using model {}'.format(weight))
         well_sites = [s for s in sites if s[:2] == well]
-        args = (inputs, outputs, channels, weights, well_sites, network)
+        # args = (inputs, outputs, channels, weights, well_sites, network)
+        args = (inputs, outputs, well_sites, config_)
         p = Worker(args, gpuid=gpu_id, method=method)
         p.start()
         p.join()

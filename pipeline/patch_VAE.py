@@ -25,7 +25,7 @@ NETWORK_MODULE = 'run_training'
 
 def extract_patches(raw_folder: str,
                     supp_folder: str,
-                    channels: list,
+                    # channels: list,
                     sites: list,
                     config: YamlReader,
                     **kwargs):
@@ -53,6 +53,9 @@ def extract_patches(raw_folder: str,
             the image size (do not pad)
 
     """
+    channels = config.inference.channels
+
+    assert len(channels) > 0, "At least one channel must be specified"
 
     window_size = config.patch.window_size
     save_fig = config.patch.save_fig
@@ -119,12 +122,13 @@ def build_trajectories(summary_folder: str,
     return
 
 
-def assemble_VAE(summary_folder: str,
+def assemble_VAE(raw_folder: str,
                  supp_folder: str,
-                 channels: list,
-                 model_path: str,
+                 # channels: list,
+                 # model_path: str,
                  sites: list,
-                 network: str = None,
+                 config: YamlReader,
+                 # network: str = None,
                  **kwargs):
     """ Wrapper method for prepare dataset for VAE encoding
 
@@ -148,6 +152,10 @@ def assemble_VAE(summary_folder: str,
 
     """
 
+    channels = config.inference.channels
+
+    assert len(channels) > 0, "At least one channel must be specified"
+
     # sites should be from a single condition (C5, C4, B-wells, etc..)
     assert len(set(site[:2] for site in sites)) == 1, \
         "Sites should be from a single well/condition"
@@ -165,17 +173,17 @@ def assemble_VAE(summary_folder: str,
     dataset, fs = prepare_dataset_v2(dat_fs, cs=channels)
     assert fs == sorted(fs)
     
-    print(f"\tsaving {os.path.join(summary_folder, '%s_file_paths.pkl' % well)}")
-    with open(os.path.join(summary_folder, '%s_file_paths.pkl' % well), 'wb') as f:
+    print(f"\tsaving {os.path.join(raw_folder, '%s_file_paths.pkl' % well)}")
+    with open(os.path.join(raw_folder, '%s_file_paths.pkl' % well), 'wb') as f:
         pickle.dump(fs, f)
 
-    print(f"\tsaving {os.path.join(summary_folder, '%s_static_patches.pkl' % well)}")
-    with open(os.path.join(summary_folder, '%s_static_patches.pkl' % well), 'wb') as f:
+    print(f"\tsaving {os.path.join(raw_folder, '%s_static_patches.pkl' % well)}")
+    with open(os.path.join(raw_folder, '%s_static_patches.pkl' % well), 'wb') as f:
         pickle.dump(dataset, f, protocol=4)
 
     well_supp_files_folder = os.path.join(supp_folder, '%s-supps' % well)
     relations = process_well_generate_trajectory_relations(fs, sites, well_supp_files_folder)
-    with open(os.path.join(summary_folder, "%s_static_patches_relations.pkl" % well), 'wb') as f:
+    with open(os.path.join(raw_folder, "%s_static_patches_relations.pkl" % well), 'wb') as f:
         pickle.dump(relations, f)
 
     return
@@ -268,12 +276,13 @@ def import_object(module_name, obj_name, obj_type='class'):
 
 def process_VAE(raw_folder: str,
                 supp_folder: str,
-                channels: list,
-                weights_dir: str,
+                # channels: list,
+                # weights_dir: str,
                 sites: list,
-                network: str= 'VQ_VAE_z16',
-                input_clamp: list = [0., 1.],
-                save_output: bool = True,
+                config_: YamlReader,
+                # network: str= 'VQ_VAE_z16',
+                # input_clamp: list = [0., 1.],
+                # save_output: bool = True,
                 **kwargs):
     """ Wrapper method for VAE encoding
 
@@ -293,6 +302,7 @@ def process_VAE(raw_folder: str,
             summarized results
         supp_folder (str): folder for supplementary data
         channels (list of int): indices of channels used for VAE encoding
+        config_ (YamlReader):
         model_dir (str): directory for model weight
         sites (list of str): list of site names
         input_clamp (list of float or None): if given, the lower/upper limit
@@ -304,16 +314,25 @@ def process_VAE(raw_folder: str,
     # For inference same normalization parameters can be used or determined from the inference data,
     # depending on if the inference data has the same distribution as training data
 
-    # these sites should be from a single condition (C5, C4, B-wells, etc..)
-    model_path = os.path.join(weights_dir, 'model.pt')
-    model_name = os.path.basename(weights_dir)
-    output_dir = os.path.join(raw_folder, model_name)
-    os.makedirs(output_dir, exist_ok=True)
+    model_path = config_.inference.weights
+    # weights_dir = config_.files.weights_dir
+    channels = config_.inference.channels
+    num_hiddens = config_.training.num_hiddens
+    num_residual_hiddens = config_.training.num_residual_hiddens
+    num_embeddings = config_.training.num_embeddings
+    commitment_cost = config_.training.committment_cost
+    network = config_.inference.model
+    save_output = config_.inference.save_output
 
-    assert len(set(site[:2] for site in sites)) == 1, \
-        "Sites should be from a single well/condition"
-    well = sites[0][:2]
-    # TODO: expose normalization parameters in train config
+    assert len(channels) > 0, "At least one channel must be specified"
+
+    # these sites should be from a single condition (C5, C4, B-wells, etc..)
+    # model_path = os.path.join(weights_dir, 'model.pt')
+    # model_name = os.path.basename(weights_dir)
+    # output_dir = os.path.join(raw_folder, model_name)
+    # os.makedirs(output_dir, exist_ok=True)
+    output_dir = config_.files.weights_dir
+
     #### cardiomyocyte data###
     # channel_mean = [0.49998672, 0.007081]
     # channel_std = [0.00074311, 0.00906428]
@@ -323,8 +342,12 @@ def process_VAE(raw_folder: str,
     # channel_std = [0.05, 0.05, 0.05]
 
     ### estimate mean and std from the data ###
-    channel_mean = None
-    channel_std = None
+    channel_mean = config_.training.channel_mean
+    channel_std = config_.training.channel_std
+
+    assert len(set(site[:2] for site in sites)) == 1, \
+        "Sites should be from a single well/condition"
+    well = sites[0][:2]
 
     print(f"\tloading file paths {os.path.join(raw_folder, '%s_file_paths.pkl' % well)}")
     fs = pickle.load(open(os.path.join(raw_folder, '%s_file_paths.pkl' % well), 'rb'))
@@ -339,18 +362,23 @@ def process_VAE(raw_folder: str,
     dataset = pickle.load(open(os.path.join(raw_folder, '%s_static_patches.pkl' % well), 'rb'))
     dataset = zscore(dataset, channel_mean=channel_mean, channel_std=channel_std)
     dataset = TensorDataset(torch.from_numpy(dataset).float())
-    search_obj = re.search(r'nh(\d+)_nrh(\d+)_ne(\d+).*', model_name)
-    num_hiddens = int(search_obj.group(1))
-    num_residual_hiddens = int(search_obj.group(2))
-    num_embeddings = int(search_obj.group(3))
+
+    # old method to search for vae hyperparams.  We will use config values instead
+    # search_obj = re.search(r'nh(\d+)_nrh(\d+)_ne(\d+).*', model_name)
+    # num_hiddens = int(search_obj.group(1))
+    # num_residual_hiddens = int(search_obj.group(2))
+    # num_embeddings = int(search_obj.group(3))
     # commitment_cost = float(search_obj.group(4))
+
+    # NETWORK_MODULE can be changed to a common model directory in the future
     network_cls = import_object(NETWORK_MODULE, network)
+
     model = network_cls(num_inputs=2,
-                       num_hiddens=num_hiddens,
-                       num_residual_hiddens=num_residual_hiddens,
-                       num_residual_layers=2,
-                       num_embeddings=num_embeddings,
-                       gpu=True)
+                        num_hiddens=num_hiddens,
+                        num_residual_hiddens=num_residual_hiddens,
+                        num_residual_layers=2,
+                        num_embeddings=num_embeddings,
+                        gpu=True)
     model = model.cuda()
     try:
         if not model_path is None:
