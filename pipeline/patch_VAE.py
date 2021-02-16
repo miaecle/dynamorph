@@ -320,7 +320,7 @@ def process_VAE(raw_folder: str,
     num_hiddens = config_.training.num_hiddens
     num_residual_hiddens = config_.training.num_residual_hiddens
     num_embeddings = config_.training.num_embeddings
-    commitment_cost = config_.training.committment_cost
+    commitment_cost = config_.training.commitment_cost
     network = config_.inference.model
     save_output = config_.inference.save_output
 
