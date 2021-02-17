@@ -8,7 +8,6 @@
 
 from pipeline.preprocess import write_raw_to_npy
 import os
-import time
 
 import argparse
 from configs.config_reader import YamlReader
@@ -16,26 +15,23 @@ from configs.config_reader import YamlReader
 
 def main(input_, output_, config_):
 
-    path = input_
-    outputs = output_
     chans = config_.preprocess.channels
     multi = config_.preprocess.multipage
+    z_slice = config_.preprocess.z_slice
 
     if config_.preprocess.fov:
         sites = config_.preprocess.fov
     else:
         # assume all subdirectories are site/FOVs
-        sites = [site for site in os.listdir(path) if os.path.isdir(os.path.join(path, site))]
+        sites = [site for site in os.listdir(input_) if os.path.isdir(os.path.join(input_, site))]
 
     for site in sites:
-        if not os.path.exists(outputs):
-            os.makedirs(outputs)
-
-        out = outputs
+        if not os.path.exists(output_):
+            os.makedirs(output_)
 
         try:
-            print(f"writing {site} to {out}", flush=True)
-            write_raw_to_npy(path, site, out, chans, multipage=multi)
+            print(f"writing {site} to {output_}", flush=True)
+            write_raw_to_npy(input_, site, output_, chans, multipage=multi, z_slice=z_slice)
         except Exception as e:
             print(f"\terror in writing {site}", flush=True)
 

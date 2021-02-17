@@ -20,6 +20,7 @@ preprocess:
   channels: ["Retardance", "Phase2D", "Brightfield"]
   fov: ['C5-Site_0','C5-Site_1']
   multipage: False
+  z_slice: 2
 
 
 patch:
