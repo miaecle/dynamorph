@@ -433,6 +433,7 @@ class VAE(nn.Module):
         decoded = self.dec(z_after)
         if batch_mask is None:
             batch_mask = t.ones_like(inputs)
+            
         recon_loss = t.sum(F.mse_loss(decoded * batch_mask, inputs * batch_mask, reduction='none')/self.channel_var)
         total_loss = self.weight_recon * recon_loss + self.weight_kld * KLD
         time_matching_loss = 0.
@@ -445,11 +446,11 @@ class VAE(nn.Module):
             time_matching_loss = (sim_mat * time_matching_mat).sum()
             total_loss += self.weight_matching * time_matching_loss
         return decoded, \
-               {'recon_loss': recon_loss/(inputs.shape[0] * 32768),
-                'KLD': KLD,
+               {'recon_loss': recon_loss/np.prod(inputs.shape),
+                'KLD': KLD/inputs.shape[0],
                 'time_matching_loss': time_matching_loss,
                 'total_loss': total_loss,
-                'perplexity': t.zeros(())}
+                'perplexity': -t.ones(())}
 
     def predict(self, inputs):
         """ Prediction fn without reparameterization
