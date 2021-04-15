@@ -539,10 +539,10 @@ class IWAE(VAE):
         recon_losses = t.stack(recon_losses, 1)
         recon_loss = (normalized_ws.detach() * recon_losses).sum()
         return None, \
-               {'recon_loss': recon_loss/(inputs.shape[0] * 32768),
+               {'recon_loss': recon_loss/np.prod(inputs.shape),
                 'time_matching_loss': time_matching_loss,
                 'total_loss': total_loss,
-                'perplexity': t.zeros(())}
+                'perplexity': -t.ones(())}
 
 
 class AAE(nn.Module):
@@ -661,7 +661,7 @@ class AAE(nn.Module):
                {'recon_loss': recon_loss,
                 'time_matching_loss': time_matching_loss,
                 'total_loss': total_loss,
-                'perplexity': t.zeros(())}
+                'perplexity': -t.ones(())}
 
     def adversarial_loss(self, inputs):
         """ Calculate adversarial loss for the batch
