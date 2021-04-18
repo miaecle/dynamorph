@@ -20,7 +20,7 @@ from scipy.sparse import csr_matrix
 
 CHANNEL_VAR = np.array([1., 1.])
 CHANNEL_MAX = 65535.
-eps = 1e-9
+EPS = 1e-9
 
 
 class VectorQuantizer(nn.Module):
@@ -678,8 +678,8 @@ class AAE(nn.Module):
         z_prior = t.randn_like(z_data)
         _z_data = self.enc_d(z_data)
         _z_prior = self.enc_d(z_prior)
-        g_loss = -t.mean(t.log(_z_data + eps))
-        d_loss = -t.mean(t.log(_z_prior + eps) + t.log(1 - _z_data.detach() + eps))
+        g_loss = -t.mean(t.log(_z_data + EPS))
+        d_loss = -t.mean(t.log(_z_prior + EPS) + t.log(1 - _z_data.detach() + EPS))
         return {'generator_loss': g_loss,
                 'descriminator_loss': d_loss,
                 'score': t.mean(_z_data)}
