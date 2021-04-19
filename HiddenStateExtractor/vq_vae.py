@@ -663,6 +663,7 @@ class AAE(nn.Module):
                 'total_loss': total_loss,
                 'perplexity': -t.ones(())}
 
+
     def adversarial_loss(self, inputs):
         """ Calculate adversarial loss for the batch
 
@@ -676,17 +677,19 @@ class AAE(nn.Module):
         # inputs: Batch * num_inputs(channel) * H * W, each channel from 0 to 1
         z_data = self.enc(inputs)
         z_prior = t.randn_like(z_data)
-        _z_data = self.enc_d(z_data)
-        _z_prior = self.enc_d(z_prior)
-        g_loss = -t.mean(t.log(_z_data + EPS))
-        d_loss = -t.mean(t.log(_z_prior + EPS) + t.log(1 - _z_data.detach() + EPS))
+        d_loss = -t.mean(t.log(self.enc_d(z_prior) + EPS) + \
+                         t.log(1 - self.enc_d(z_data.detach()) + EPS))
+        g_loss = -t.mean(t.log(self.enc_d(z_data) + EPS))
         return {'generator_loss': g_loss,
-                'descriminator_loss': d_loss,
-                'score': t.mean(_z_data)}
+                'discriminator_loss': d_loss,
+                'data_score': t.mean(self.enc_d(z_data)),
+                'prior_score': t.mean(self.enc_d(z_prior))}
+
 
     def predict(self, inputs):
         """ Prediction fn, same as forward pass """
         return self.forward(inputs)
+
 
 
 if __name__ == '__main__':
